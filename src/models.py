@@ -1,6 +1,8 @@
 # src/models.py
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, LargeBinary
 from sqlalchemy.orm import declarative_base, relationship
+from datetime import datetime
+
 
 Base = declarative_base()
 
@@ -77,3 +79,35 @@ class Location(Base):
     match_id = Column(String, ForeignKey('matches.id'), unique=True)
     
     match = relationship("Match", back_populates="location")
+
+class TeamLogo(Base):
+    __tablename__ = 'team_logos'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(String, ForeignKey('teams.id'), unique=True)
+    logo_data = Column(LargeBinary)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship with Team
+    team = relationship("Team", backref="logo")
+
+class SchoolInfo(Base):
+    __tablename__ = 'school_info'
+    
+    id = Column(String, primary_key=True)  # This will be the school_id we get from scraping
+    name = Column(String)
+    conference = Column(String)
+    ita_region = Column(String)
+    ranking_award_region = Column(String)
+    usta_section = Column(String)
+    man_id = Column(String)
+    woman_id = Column(String)
+    division = Column(String)
+    mailing_address = Column(String)
+    city = Column(String)
+    state = Column(String)
+    zip_code = Column(String)
+    team_type = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
