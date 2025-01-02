@@ -59,10 +59,42 @@ async def main():
 
         # await collector.test_single_logo_fetch()
         #Test with a random team that has a logo
-        team_id, team_name = collector.get_random_team_with_logo()
-        if team_id:
-            print(f"\nTesting with random team: {team_name}")
-            collector.test_retrieve_logo(team_id, f"{team_name.replace(' ', '_')}_logo.png")
+    #     team_id, team_name = collector.get_random_team_with_logo()
+    #     if team_id:
+    #         print(f"\nTesting with random team: {team_name}")
+    #         collector.test_retrieve_logo(team_id, f"{team_name.replace(' ', '_')}_logo.png")
+
+    # except Exception as e:
+    #     print(f"Error in main process: {e}")
+
+     # Update school details
+        # print("Updating school details...")
+        # collector.update_school_details()
+        # print("School details update completed!")
+     
+        # # Store season information
+        # print("Storing season information...")
+        # collector.store_seasons()
+        # print("Season information stored!")
+
+          # Process all rosters for current season
+        # season_id = "0d09ee6d-c173-4d98-8207-7c944409faf0"  # 2024 season
+        # print("Processing rosters...")
+        # collector.process_all_rosters(season_id)
+        # print("Roster processing completed!")
+
+        # #Store all player matches
+        # print("Starting to store all player matches...")
+        # collector.store_all_player_matches()
+        # print("Completed storing all player matches!")
+
+        #store dual matches score box
+        print("Starting to store all match lineups...")
+        collector.store_all_match_lineups()
+        print("Completed storing all match lineups!")
+
+    except Exception as e:
+        print(f"Error in main process: {e}")
 
     except Exception as e:
         print(f"Error in main process: {e}")
