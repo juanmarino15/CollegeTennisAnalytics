@@ -43,7 +43,7 @@ logo = team_service.get_team_logo(test_team_id)
 print(f"Has logo: {logo is not None}")
 
 # Test roster
-roster = team_service.get_roster(test_team_id)
+roster = team_service.get_roster(test_team_id, "2024")
 print(f"Roster size: {len(roster)}")
 
 # Debug roster data
