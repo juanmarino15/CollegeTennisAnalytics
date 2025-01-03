@@ -134,6 +134,10 @@ class Player(Base):
     avatar_url = Column(String)  # avatarUrl from API
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    def __repr__(self):
+        return (f"<Player(person_id={self.person_id}, tennis_id={self.tennis_id}, "
+                f"first_name={self.first_name}, last_name={self.last_name}, "
+                f"avatar_url={self.avatar_url})>")
 
 class PlayerSeason(Base):
     __tablename__ = 'player_seasons'

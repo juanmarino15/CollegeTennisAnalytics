@@ -3,9 +3,9 @@ import asyncio
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent / "collector"))
 
-from src.data_collector import TennisDataCollector
+from collector.data_collector import TennisDataCollector
 
 async def main():
     database_url = 'postgresql://juanmarino@localhost:5432/college_tennis_db'
@@ -41,21 +41,21 @@ async def main():
         # print(f"\nCompleted storing {len(upcoming_matches)} upcoming matches!")
     
         # Print initial counts
-        # counts = collector.get_teams_with_logos_count()
-        # print(f"Before fetching:")
-        # print(f"Total teams: {counts['total_teams']}")
-        # print(f"Teams with logos: {counts['with_logos']}")
-        # print(f"Teams without logos: {counts['without_logos']}")
+        counts = collector.get_teams_with_logos_count()
+        print(f"Before fetching:")
+        print(f"Total teams: {counts['total_teams']}")
+        print(f"Teams with logos: {counts['with_logos']}")
+        print(f"Teams without logos: {counts['without_logos']}")
         
         # # Fetch and store logos
-        # await collector.fetch_and_store_team_logos()
+        await collector.fetch_and_store_team_logos()
         
         # # Print final counts
-        # counts = collector.get_teams_with_logos_count()
-        # print(f"\nAfter fetching:")
-        # print(f"Total teams: {counts['total_teams']}")
-        # print(f"Teams with logos: {counts['with_logos']}")
-        # print(f"Teams without logos: {counts['without_logos']}")
+        counts = collector.get_teams_with_logos_count()
+        print(f"\nAfter fetching:")
+        print(f"Total teams: {counts['total_teams']}")
+        print(f"Teams with logos: {counts['with_logos']}")
+        print(f"Teams without logos: {counts['without_logos']}")
 
         # await collector.test_single_logo_fetch()
         #Test with a random team that has a logo
@@ -77,7 +77,7 @@ async def main():
         # collector.store_seasons()
         # print("Season information stored!")
 
-          # Process all rosters for current season
+        # Process all rosters for current season
         # season_id = "0d09ee6d-c173-4d98-8207-7c944409faf0"  # 2024 season
         # print("Processing rosters...")
         # collector.process_all_rosters(season_id)
@@ -89,9 +89,9 @@ async def main():
         # print("Completed storing all player matches!")
 
         #store dual matches score box
-        print("Starting to store all match lineups...")
-        collector.store_all_match_lineups()
-        print("Completed storing all match lineups!")
+        # print("Starting to store all match lineups...")
+        # collector.store_all_match_lineups()
+        # print("Completed storing all match lineups!")
 
     except Exception as e:
         print(f"Error in main process: {e}")

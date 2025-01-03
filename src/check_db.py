@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
-from models import Base, Match, Team, MatchTeam, WebLink  # Changed this line
+from models.models import Base, Match, Team, MatchTeam, WebLink  # Changed this line
 
 # Setup the PostgreSQL database connection
 DATABASE_URL = "postgresql://juanmarino:promocion2011@localhost:5432/college_tennis_db"  # Replace with your PostgreSQL credentials and database details

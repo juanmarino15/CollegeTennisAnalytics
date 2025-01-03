@@ -4,7 +4,7 @@ import httpx
 from datetime import datetime
 from sqlalchemy import create_engine, func, distinct
 from sqlalchemy.orm import sessionmaker
-from src.models import (
+from models.models import (
     Base, Match, Team, MatchTeam, WebLink, TeamLogo, SchoolInfo, Season, 
     Player, PlayerRoster, PlayerWTN, PlayerSeason, PlayerMatch, PlayerMatchSet, 
     PlayerMatchParticipant, MatchLineup, MatchLineupSet
@@ -716,8 +716,8 @@ class TennisDataCollector:
             getRosterMembers(rosterId: $rosterId, role: $role, seasonId: $seasonId) {
                 personId
                 tennisId
-                first_name
-                last_name
+                standardGivenName
+                standardFamilyName
                 class
                 avatarUrl
                 worldTennisNumbers {
@@ -764,7 +764,7 @@ class TennisDataCollector:
         session = self.Session()
         try:
             roster_data = self.fetch_roster_members(team_id, season_id)
-            
+                        
             if roster_data and 'data' in roster_data and 'getRosterMembers' in roster_data['data']:
                 players = roster_data['data']['getRosterMembers']
                 print(f"Found {len(players)} players to process")
@@ -775,10 +775,10 @@ class TennisDataCollector:
                         player = session.query(Player).get(player_info['personId'])
                         if not player:
                             player = Player(person_id=player_info['personId'])
-                            
+                        
                         player.tennis_id = player_info['tennisId']
-                        player.standard_given_name = player_info['first_name']
-                        player.standard_family_name = player_info['last_name']
+                        player.first_name = player_info['standardGivenName']
+                        player.last_name = player_info['standardFamilyName']
                         player.avatar_url = player_info['avatarUrl']
                         
                         session.merge(player)
@@ -853,9 +853,10 @@ class TennisDataCollector:
                             session.merge(wtn_entry)
                         
                         session.commit()
-                        print(f"Successfully stored player: {player.standard_given_name} {player.standard_family_name} for season {season_id}")
+                        print(f"Successfully stored player: {player.first_name} {player.last_name} for season {season_id}")
                         
                     except Exception as e:
+                        print(player_info)
                         print(f"Error processing player {player_info.get('first_name', '')} {player_info.get('last_name', '')}: {e}")
                         session.rollback()
                         continue
@@ -893,112 +894,6 @@ class TennisDataCollector:
             print(f"Error processing rosters: {e}")
         finally:
             session.close()
-    
-        """Fetch match results for a player"""
-        url = "https://prd-itat-kube.clubspark.pro/mesh-api/graphql"
-        query = """query matchUps($personFilter: [td_PersonFilterOptions], $filter: td_MatchUpFilterOptions) {
-            td_matchUps(personFilter: $personFilter, filter: $filter) {
-                totalItems
-                items {
-                    score {
-                        scoreString
-                        sets {
-                            winnerGamesWon
-                            loserGamesWon
-                            winRatio
-                            tiebreaker {
-                                winnerPointsWon
-                                loserPointsWon
-                                __typename
-                            }
-                            __typename
-                        }
-                        superTiebreak {
-                            winnerPointsWon
-                            loserPointsWon
-                            __typename
-                        }
-                        __typename
-                    }
-                    sides {
-                        sideNumber
-                        players {
-                            person {
-                                externalID
-                                nativeFamilyName
-                                nativeGivenName
-                                __typename
-                            }
-                            __typename
-                        }
-                        extensions {
-                            name
-                            value
-                            __typename
-                        }
-                        __typename
-                    }
-                    winningSide
-                    start
-                    end
-                    type
-                    matchUpFormat
-                    status
-                    tournament {
-                        providerTournamentId
-                        __typename
-                    }
-                    extensions {
-                        name
-                        value
-                        __typename
-                    }
-                    roundName
-                    collectionPosition
-                    __typename
-                }
-                __typename
-            }
-        }"""
-
-        variables = {
-            "personFilter": {
-                "ids": [{
-                    "type": "ExternalID",
-                    "identifier": person_id
-                }]
-            },
-            "filter": {
-                "start": {"after": "2023-08-01"},
-                "end": {"before": "2024-07-31"},
-                "statuses": ["DEFAULTED", "RETIRED", "WALKOVER", "COMPLETED", "ABANDONED"]
-            }
-        }
-
-        try:
-            response = requests.post(
-                url,
-                json={
-                    'operationName': 'matchUps',
-                    'query': query,
-                    'variables': variables
-                },
-                headers={'Content-Type': 'application/json'},
-                verify=False
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                print(f"Response received: {data}")
-                return data
-            else:
-                print(f"Error fetching matches: Status {response.status_code}")
-                print(f"Response: {response.text}")
-                return {}
-                
-        except Exception as e:
-            print(f"Error fetching matches: {e}")
-            return {}
         
     def fetch_player_matches(self, person_id: str) -> dict:
         """Fetch match results for a player"""

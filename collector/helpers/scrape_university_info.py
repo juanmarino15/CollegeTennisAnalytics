@@ -6,7 +6,7 @@ from urllib3.exceptions import InsecureRequestWarning
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from src.models import Base, Team, SchoolInfo
+from models.models import Base, Team, SchoolInfo
 
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
