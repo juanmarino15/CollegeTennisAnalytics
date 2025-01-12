@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/logs:/app/logs
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/college_tennis_db
+    depends_on:
+      - db
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend/logs:/app/logs
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/college_tennis_db
+    depends_on:
+      - db
+    command: python collector/update_data.py --all
+
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=college_tennis_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
