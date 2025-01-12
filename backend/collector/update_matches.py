@@ -20,7 +20,8 @@ class MatchUpdatesService:
         self.engine = create_engine(database_url)
         self.Session = sessionmaker(bind=self.engine)
         # Use correct API endpoint
-        self.api_url = 'https://prd-itat-kube-tournamentdesk-api.clubspark.pro/'
+        # Change in MatchUpdatesService __init__
+        self.api_url = 'https://prd-itat-kube-tournamentdesk-api.clubspark.pro/'  # Instead of tournamentdesk-api
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json',
@@ -38,6 +39,7 @@ class MatchUpdatesService:
 
     async def fetch_matches_batch(self, skip: int = 0, limit: int = 100, is_completed: bool = True) -> Optional[Dict]:
         """Fetch multiple matches in one request"""
+        print(is_completed)
         query = """
         query dualMatchesPaginated($skip: Int!, $limit: Int!, $filter: DualMatchesFilter, $sort: DualMatchesSort) {
             dualMatchesPaginated(skip: $skip, limit: $limit, filter: $filter, sort: $sort) {
@@ -99,9 +101,6 @@ class MatchUpdatesService:
             },
             "filter": {
                 "seasonStarting": "2024",
-                "startDate": {
-                    "gte": one_week_ago.strftime("%Y-%m-%d") if is_completed else today.strftime("%Y-%m-%d")
-                },
                 "isCompleted": is_completed,
                 "divisions": ["DIVISION_1"]
             }
@@ -185,9 +184,9 @@ class MatchUpdatesService:
             logging.info(f"Completed processing {completed_count} completed matches")
 
             # Process upcoming matches
-            logging.info("Processing upcoming matches...")
-            upcoming_count = await self.process_matches_batch(is_completed=False)
-            logging.info(f"Completed processing {upcoming_count} upcoming matches")
+            # logging.info("Processing upcoming matches...")
+            # upcoming_count = await self.process_matches_batch(is_completed=False)
+            # logging.info(f"Completed processing {upcoming_count} upcoming matches")
 
         except Exception as e:
             logging.error(f"Error in update_matches: {str(e)}")
