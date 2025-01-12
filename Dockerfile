@@ -18,8 +18,5 @@ COPY backend/ .
 # Create volume for logs
 VOLUME /app/logs
 
-# Expose port
-EXPOSE 8000
-
-# Run the application
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the collector instead of the API
+CMD ["python", "scripts/update_data.py", "--all"]
