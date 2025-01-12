@@ -130,7 +130,7 @@ class MatchUpdatesService:
                     logging.info(f"Found {total} total matches, received {len(items)} in this batch")
                     return matches_data
                 else:
-                    logging.error(f"Error response from API: Status {response.status_code}")
+                    logging.error(f"Error response from API: Statuss {response.status_code}")
                     logging.error(f"Response body: {response.text}")
                     return None
 
