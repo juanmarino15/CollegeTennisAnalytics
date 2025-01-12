@@ -27,11 +27,19 @@ class PlayerMatchesCollector:
     def __init__(self, database_url: str):
         self.api_url = 'https://prd-itat-kube.clubspark.pro/mesh-api/graphql'
         self.headers = {
-            'User-Agent': 'CollegeTennisAnalytics/1.0',
-            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json,text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Content-Type': 'application/json',
             'Origin': 'https://www.collegetennis.com',
-            'Referer': 'https://www.collegetennis.com/'
+            'Referer': 'https://www.collegetennis.com/',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'cross-site',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache'
         }
         
         try:
