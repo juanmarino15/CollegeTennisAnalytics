@@ -144,6 +144,7 @@ class MatchUpdatesService:
         limit = 100
         total_processed = 0
         match_type = "completed" if is_completed else "upcoming"
+        cutoff_date = datetime(2025, 1, 1).date()  # Just get the date
 
         while True:
             logging.info(f"Fetching {match_type} matches batch (skip={skip}, limit={limit})")
@@ -158,9 +159,23 @@ class MatchUpdatesService:
             
             for match_data in matches:
                 try:
+                    # Parse match date and get just the date part
+                    match_date_str = match_data['startDateTime']['dateTimeString']
+                    match_date = datetime.fromisoformat(match_date_str.replace('Z', '+00:00')).date()
+
+                    # If we hit a match before January 1st, stop processing
+                    if match_date < cutoff_date:
+                        logging.info(f"Reached match before January 1st (date: {match_date}). Stopping processing.")
+                        return total_processed
+
                     match_id = match_data.get('id')
-                    logging.debug(f"Processing {match_type} match {match_id}")
+                    logging.debug(f"Processing {match_type} match {match_id} from {match_date}")
                     self.store_single_match(match_data)
+
+                    lineup_data = await self.fetch_dual_match_details(match_id)
+                    if lineup_data and 'data' in lineup_data and 'dualMatch' in lineup_data['data']:
+                        await self.store_match_lineup(match_id, lineup_data)
+                    
                     total_processed += 1
                 except Exception as e:
                     match_id = match_data.get('id', 'unknown')
@@ -173,17 +188,20 @@ class MatchUpdatesService:
                 break
                 
             skip += limit
+                
             await asyncio.sleep(1)
 
         return total_processed
 
     async def update_matches(self) -> None:
-        """Update both completed and upcoming matches"""
+        """Update both completed and upcoming matches, then check for matches that dont have scores and update them"""
+
         try:
             # Process completed matches from last week
             logging.info("Processing completed matches from last week...")
             completed_count = await self.process_matches_batch(is_completed=True)
             logging.info(f"Completed processing {completed_count} completed matches")
+            # completed_not_catched_count = await self.process_completed_catched_mateches()
 
             # Process upcoming matches
             # logging.info("Processing upcoming matches...")
@@ -281,47 +299,56 @@ class MatchUpdatesService:
             logging.error(f"Error fetching match lineup: {e}")
             return {}
 
-    def ensure_players_exist(self, session, tie_match: Dict) -> bool:
+    async def ensure_players_exist(self, session, tie_match: Dict, match_id: str) -> bool:
         """Ensure all players in the lineup exist in the database"""
         try:
             # Collect all player IDs and info from both sides
             players_to_check = []
+            print('match id', match_id)
             
-            
-            # Side 1 players
-            for participant in tie_match['side1'].get('participants', []):
-                if participant:
-                    print(participant)
-                    players_to_check.append({
-                        'person_id': participant.get('personId'),
-                        'first_name': participant.get('firstName'),
-                        'last_name': participant.get('lastName')
-                    })
-                    
-            # Side 2 players
-            for participant in tie_match['side2'].get('participants', []):
-                if participant:
-                    players_to_check.append({
-                        'person_id': participant.get('personId'),
-                        'first_name': participant.get('firstName'),
-                        'last_name': participant.get('lastName')
-                    })
+            # Process both sides
+            for side in ['side1', 'side2']:
+                for idx, participant in enumerate(tie_match[side].get('participants', [])):
+                    if participant:
+                        players_to_check.append({
+                            'side': side,
+                            'index': idx,
+                            'person_id': participant.get('personId'),
+                            'first_name': participant.get('firstName'),
+                            'last_name': participant.get('lastName')
+                        })
 
             # Check and create players if needed
             for player_info in players_to_check:
+                print('player info', player_info)
                 if not player_info['person_id']:
                     logging.warning(f"Missing person_id for player {player_info}")
                     continue
 
                 existing_player = session.query(Player).get(player_info['person_id'])
+                print('existing player', existing_player)
+                
                 if not existing_player:
-                    new_player = Player(
-                        person_id=player_info['person_id'],
-                        first_name=player_info['first_name'],
-                        last_name=player_info['last_name']
-                    )
-                    # session.add(new_player)
-                    logging.info(f"Created new player: {player_info['first_name']} {player_info['last_name']}")
+                    # Try to find player by name
+                    name_match = session.query(Player).filter(
+                        func.upper(Player.first_name) == func.upper(player_info['first_name']),
+                        func.upper(Player.last_name) == func.upper(player_info['last_name'])
+                    ).first()
+                    
+                    if name_match:
+                        # Update tie_match data with the matched player's ID
+                        logging.info(f"Found player match by name: {name_match.first_name} {name_match.last_name} ({name_match.person_id})")
+                        
+                        # Update the participant data in tie_match
+                        tie_match[player_info['side']]['participants'][player_info['index']]['personId'] = name_match.person_id
+                    else:
+                        new_player = Player(
+                            person_id=player_info['person_id'],
+                            first_name=player_info['first_name'],
+                            last_name=player_info['last_name']
+                        )
+                        # session.add(new_player)
+                        logging.info(f"Created new player: {player_info['first_name']} {player_info['last_name']}")
 
             session.flush()
             return True
@@ -338,6 +365,7 @@ class MatchUpdatesService:
         session = self.Session()
         try:
             match = match_data['data']['dualMatch']
+            # print(match)
             # logging.info(f"Processing match {match_id} with {len(match['tieMatchUps'])} lineups")
             
             # Check if match exists
@@ -360,7 +388,7 @@ class MatchUpdatesService:
                         continue
 
                     # Ensure all players exist in database
-                    if not self.ensure_players_exist(session, tie_match):
+                    if not await self.ensure_players_exist(session, tie_match, match_id):
                         logging.error("Failed to ensure players exist, skipping lineup")
                         continue
 
@@ -727,6 +755,8 @@ class MatchUpdatesService:
                     session.merge(web_link)
 
                 session.commit()
+            
+
 
             except Exception as e:
                 print(f"Error storing match: {e}")
@@ -844,5 +874,46 @@ class MatchUpdatesService:
         except Exception as e:
             print(f"Error processing roster: {e}")
             session.rollback()
+        finally:
+            session.close()
+
+    def process_completed_not_catched_matches(self):
+        """Process completed matches that were not caught by the initial fetch"""
+        if not self.Session:
+            raise RuntimeError("Database not initialized")
+            
+        session = self.Session()
+        try:
+            # Get matches without scores where match date is less than today
+            matches = session.query(Match).filter(
+                Match.completed == True,
+                Match.home_team_score == None,
+                Match.away_team_score == None
+            ).all()
+            
+            print(f"Found {len(matches)} matches without scores to process")
+            
+            for match in matches:
+                try:
+                    # Fetch match data from API
+                    match_data = self.fetch_single_match(match.id)
+                    if not match_data:
+                        continue
+                        
+                    # Update match with new data
+                    self.update_single_match(match, match_data)
+                    
+                except Exception as e:
+                    print(f"Error processing match {match.id}: {e}")
+                    session.rollback()
+                    continue
+                    
+            session.commit()
+            return len(matches)
+            
+        except Exception as e:
+            print(f"Error processing matches: {e}")
+            session.rollback()
+            return 0
         finally:
             session.close()

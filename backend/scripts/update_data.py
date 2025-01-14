@@ -31,8 +31,8 @@ logging.basicConfig(
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL is None:
     # Fallback for local development
-    DATABASE_URL = "postgresql://juanmarino@localhost:5432/college_tennis_db"
-    # DATABASE_URL = "postgresql://dev-college-analyticis-db:AVNS_hhOdMVbRJmDYoEn6Q9z@app-1cef99df-53b2-41c6-8604-aa6d278bdd7d-do-user-18766687-0.j.db.ondigitalocean.com:25060/dev-college-analyticis-db?sslmode=require"
+    # DATABASE_URL = "postgresql://juanmarino@localhost:5432/college_tennis_db"
+    DATABASE_URL = "postgresql://dev-college-analyticis-db:AVNS_hhOdMVbRJmDYoEn6Q9z@app-1cef99df-53b2-41c6-8604-aa6d278bdd7d-do-user-18766687-0.j.db.ondigitalocean.com:25060/dev-college-analyticis-db?sslmode=require"
 
 
 async def update_matches():
