@@ -6,7 +6,7 @@ on:
     branches: [ main ]  # Run on push to main branch
   workflow_dispatch:    # Allow manual triggering
   schedule:
-    - cron: '0 */4 * * *'  # Also keep the scheduled runs
+    - cron: '0 */8 * * *'  # Every 8 hours
 
 jobs:
   collect:
