@@ -708,7 +708,8 @@ class MatchUpdatesService:
                     )
 
                 # Process and store match
-                start_date = datetime.fromisoformat(match_data['startDateTime']['dateTimeString'].replace('Z', '+00:00'))
+                start_date = datetime.fromisoformat(match_data['startDateTime']['dateTimeString'].replace('Z', ''))
+                
                 # Set season to the previous year since matches are in spring
                 season_year = str(start_date.year - 1)
                 

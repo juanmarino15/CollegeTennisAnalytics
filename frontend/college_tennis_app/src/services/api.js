@@ -13,6 +13,11 @@ export const api = {
       const response = await fetch(`${BASE_URL}/matches/${id}`);
       if (!response.ok) throw new Error('Failed to fetch match');
       return response.json();
+    },
+    getLineup: async (id) => {
+      const response = await fetch(`${BASE_URL}/matches/${id}/lineup`);
+      if (!response.ok) throw new Error('Failed to fetch match lineup');
+      return response.json();
     }
   },
 
@@ -29,9 +34,9 @@ export const api = {
       return response.json();
     },
     getLogo: async (id) => {
-        const response = await fetch(`${BASE_URL}/teams/${id}/logo`);
-        if (!response.ok) throw new Error('Failed to fetch team logo');
-        return response.blob();
-      }
+      const response = await fetch(`${BASE_URL}/teams/${id}/logo`);
+      if (!response.ok) throw new Error('Failed to fetch team logo');
+      return response.blob();
+    }
   }
 };
