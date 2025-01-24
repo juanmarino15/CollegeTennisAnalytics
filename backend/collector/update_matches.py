@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, or_, func, and_
 from sqlalchemy.orm import sessionmaker
 from typing import Optional, Dict
 import requests
+import pytz
 
 from models.models import (
     Base, Match, MatchTeam, MatchLineup, MatchLineupSet,
@@ -201,7 +202,6 @@ class MatchUpdatesService:
             logging.info("Processing completed matches from last week...")
             completed_count = await self.process_matches_batch(is_completed=True)
             logging.info(f"Completed processing {completed_count} completed matches")
-            # completed_not_catched_count = await self.process_completed_catched_mateches()
 
             # Process upcoming matches
             # logging.info("Processing upcoming matches...")
@@ -708,8 +708,10 @@ class MatchUpdatesService:
                     )
 
                 # Process and store match
-                start_date = datetime.fromisoformat(match_data['startDateTime']['dateTimeString'].replace('Z', ''))
-                
+                utc_time = datetime.fromisoformat(match_data['startDateTime']['dateTimeString'].replace('Z', '+00:00'))
+                local_tz = pytz.timezone(match_data['startDateTime']['timezoneName'])
+                start_date = utc_time.astimezone(local_tz)   
+
                 # Set season to the previous year since matches are in spring
                 season_year = str(start_date.year - 1)
                 

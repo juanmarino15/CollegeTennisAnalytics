@@ -18,6 +18,11 @@ export const api = {
       const response = await fetch(`${BASE_URL}/matches/${id}/lineup`);
       if (!response.ok) throw new Error('Failed to fetch match lineup');
       return response.json();
+    },
+    getScore: async (id) => {
+      const response = await fetch(`${BASE_URL}/matches/${id}/score`);
+      if (!response.ok) throw new Error('Failed to fetch match score');
+      return response.json();
     }
   },
 

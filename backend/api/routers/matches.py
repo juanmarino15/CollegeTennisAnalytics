@@ -42,3 +42,11 @@ def get_match_lineup(match_id: str, db: Session = Depends(get_db)):
     if lineup is None:
         raise HTTPException(status_code=404, detail="Lineup not found")
     return lineup
+
+@router.get("/{match_id}/score")
+def get_match_score(match_id: str, db: Session = Depends(get_db)):
+    service = MatchService(db)
+    score = service.get_match_score(match_id)
+    if score is None:
+        raise HTTPException(status_code=404, detail="Match score not found")
+    return score

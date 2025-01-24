@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo} from 'react';
-import { Calendar, Clock, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, ChevronRight,ArrowUpDown } from 'lucide-react';
 import { api } from '../services/api';
 
 // TeamLogo component
@@ -41,6 +41,7 @@ const MatchesPage = () => {
  const [filters, setFilters] = useState({
   gender: '',
   conference: '',
+  sort: 'time-asc'
 });
 
 // Sort matches by time
@@ -48,9 +49,26 @@ const sortedMatches = useMemo(() => {
   return [...matches].sort((a, b) => {
     const timeA = new Date(a.scheduled_time);
     const timeB = new Date(b.scheduled_time);
-    return timeA - timeB;  // This will sort in ascending order
+    
+    switch (filters.sort) {
+      case 'time-desc':
+        return timeB - timeA;
+      case 'conference':
+        // Sort conference matches first
+        if (a.is_conference_match && !b.is_conference_match) return -1;
+        if (!a.is_conference_match && b.is_conference_match) return 1;
+        return timeA - timeB;
+      case 'completed':
+        // Sort completed matches first
+        if (a.completed && !b.completed) return -1;
+        if (!a.completed && b.completed) return 1;
+        return timeA - timeB;
+      case 'time-asc':
+      default:
+        return timeA - timeB;
+    }
   });
-}, [matches]);
+}, [matches, filters.sort]);
 
 // Helper function to format conference name
 const formatConferenceName = (conference) => {
@@ -64,7 +82,9 @@ const formatConferenceName = (conference) => {
      return date.toLocaleTimeString('en-US', {
        hour: '2-digit',
        minute: '2-digit',
-       timeZoneName: 'short'
+       timeZoneName: 'short',
+       timeZone: timezone
+
      });
    } catch (e) {
      return 'Time TBD';
@@ -106,33 +126,32 @@ useEffect(() => {
       setLoading(true);
       const dateStr = selectedDate.toISOString().split('T')[0];
       let matchesData = await api.matches.getAll(dateStr);
-
+  
       // Apply filters
       if (filters.gender) {
         matchesData = matchesData.filter(match => match.gender === filters.gender);
       }
-// In your useEffect where you apply filters
-if (filters.conference) {
-  matchesData = matchesData.filter(match => {
-    const homeTeam = teams[match.home_team_id];
-    const awayTeam = teams[match.away_team_id];
-    return homeTeam?.conference === filters.conference || awayTeam?.conference === filters.conference;
-  });
-}
-
+      if (filters.conference) {
+        matchesData = matchesData.filter(match => {
+          const homeTeam = teams[match.home_team_id];
+          const awayTeam = teams[match.away_team_id];
+          return homeTeam?.conference === filters.conference || awayTeam?.conference === filters.conference;
+        });
+      }
+  
       // Fetch scores for completed matches
       const scoresPromises = matchesData
         .filter(match => match.completed)
-        .map(match => api.matches.getLineup(match.id));
+        .map(match => api.matches.getScore(match.id));
       
-      const lineupResults = await Promise.all(scoresPromises);
+      const scoreResults = await Promise.all(scoresPromises);
       const scoresMap = {};
       matchesData
         .filter(match => match.completed)
         .forEach((match, index) => {
-          scoresMap[match.id] = lineupResults[index];
+          scoresMap[match.id] = scoreResults[index];
         });
-
+  
       setMatchScores(scoresMap);
       setMatches(matchesData);
       await fetchTeams(matchesData);
@@ -157,55 +176,79 @@ if (filters.conference) {
 
  return (
   <div className="py-4 space-y-4">
-   {/* Date and Filters Section */}
-<div className="bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg">
-  <div className="flex items-center gap-6">
-    {/* Date Selector */}
-    <div className="flex items-center gap-2">
-      <Calendar className="w-5 h-5 text-primary-500" />
-      <input
-        type="date"
-        value={selectedDate.toISOString().split('T')[0]}
-        onChange={(e) => setSelectedDate(new Date(e.target.value))}
-        className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-                  text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
-      />
-    </div>
+    {/* Date and Filters Section */}
+    <div className="bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-4">
+        {/* Date selector - Full width on mobile, auto on larger screens */}
+        <div className="w-full sm:w-auto">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary-500 flex-shrink-0" />
+            <input
+              type="date"
+              value={selectedDate.toISOString().split('T')[0]}
+              onChange={(e) => setSelectedDate(new Date(e.target.value))}
+              className="w-full sm:w-auto bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
+                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+        </div>
 
-    {/* Gender Filter */}
-    <div className="flex items-center gap-2">
-      <label className="text-sm text-gray-600 dark:text-gray-400">Gender:</label>
-      <select
-        value={filters.gender}
-        onChange={(e) => setFilters(prev => ({ ...prev, gender: e.target.value }))}
-        className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-                  text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
-      >
-        <option value="">All</option>
-        <option value="MALE">Men</option>
-        <option value="FEMALE">Women</option>
-      </select>
-    </div>
+        {/* Filters Container - Grid on mobile, flex-row on larger screens */}
+        <div className="grid grid-cols-1 sm:flex sm:flex-row gap-4">
+          {/* Gender Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap min-w-[60px]">Gender:</label>
+            <select
+              value={filters.gender}
+              onChange={(e) => setFilters(prev => ({ ...prev, gender: e.target.value }))}
+              className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
+                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">All</option>
+              <option value="MALE">Men</option>
+              <option value="FEMALE">Women</option>
+            </select>
+          </div>
 
-    {/* Conference Filter */}
-    <div className="flex items-center gap-2">
-      <label className="text-sm text-gray-600 dark:text-gray-400">Conference:</label>
-      <select
-        value={filters.conference}
-        onChange={(e) => setFilters(prev => ({ ...prev, conference: e.target.value }))}
-        className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-                  text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
-      >
-        <option value="">All Matches</option>
-        {[...availableConferences].sort().map(conf => (
-          <option key={conf} value={conf}>
-            {formatConferenceName(conf)}
-          </option>
-        ))}
-      </select>
+          {/* Conference Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap min-w-[60px]">Conference:</label>
+            <select
+              value={filters.conference}
+              onChange={(e) => setFilters(prev => ({ ...prev, conference: e.target.value }))}
+              className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
+                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">All Matches</option>
+              {[...availableConferences].sort().map(conf => (
+                <option key={conf} value={conf}>
+                  {formatConferenceName(conf)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sort Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap min-w-[60px] flex items-center">
+              <ArrowUpDown className="w-4 h-4 mr-1" />
+              Sort:
+            </label>
+            <select
+              value={filters.sort}
+              onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+              className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
+                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="time-asc">Start Time (Earliest)</option>
+              <option value="time-desc">Start Time (Latest)</option>
+              <option value="conference">Conference First</option>
+              <option value="completed">Completed First</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
     {/* Matches List */}
     <div className="space-y-4">
@@ -247,17 +290,27 @@ if (filters.conference) {
                   {match.completed ? (
                     <span className="text-lg font-medium text-gray-900 dark:text-dark-text">
                       {matchScores[match.id] ? 
-                        `${matchScores[match.id].filter(m => m.side1_won).length} - ${matchScores[match.id].filter(m => m.side2_won).length}` 
+                        `${matchScores[match.id].home_team_score} - ${matchScores[match.id].away_team_score}` 
                         : 'vs'}
                     </span>
                   ) : (
                     <>
                       <span className="text-lg font-medium text-gray-900 dark:text-dark-text">
-                        {new Date(match.scheduled_time).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true
-                        })}
+                        {(() => {
+                          try {
+                            if (!match.scheduled_time) return 'TBD';
+                            const date = new Date(match.scheduled_time + 'Z');
+                            if (isNaN(date.getTime())) return 'TBD';
+                            return new Date(match.scheduled_time + 'Z').toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                              timeZone: match.timezone
+                            });
+                          } catch (e) {
+                            return 'TBD';
+                          }
+                        })()}
                       </span>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         {formatMatchTime(match.scheduled_time, match.timezone).split(' ').pop()}
@@ -266,7 +319,7 @@ if (filters.conference) {
                   )}
                   {match.completed && (
                     <span className="text-xs px-2 py-0.5 mt-1 rounded-full inline-flex items-center
-                                 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                                  bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
                       Final
                     </span>
                   )}

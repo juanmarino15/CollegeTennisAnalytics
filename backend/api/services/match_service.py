@@ -73,3 +73,22 @@ class MatchService:
             ).all()
             return [self._lineup_to_dict(lineup) for lineup in lineups]
         return []
+
+    def get_match_score(self, match_id: str):
+        """Get score from match_teams table"""
+        if match_id:
+            upper_match_id = match_id.upper()
+            match_teams = self.db.query(MatchTeam).filter(
+                func.upper(MatchTeam.match_id) == upper_match_id
+            ).order_by(MatchTeam.is_home_team.desc()).all()  # home team first
+            
+            if not match_teams:
+                return None
+                
+            return {
+                "home_team_score": match_teams[0].score if match_teams[0].score is not None else 0,
+                "away_team_score": match_teams[1].score if match_teams[1].score is not None else 0,
+                "home_team_won": match_teams[0].did_win,
+                "away_team_won": match_teams[1].did_win
+            }
+        return None
