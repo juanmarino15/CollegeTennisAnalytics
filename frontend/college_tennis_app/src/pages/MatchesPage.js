@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo} from 'react';
 import { Calendar, Clock, ChevronRight,ArrowUpDown } from 'lucide-react';
 import { api } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 // TeamLogo component
 const TeamLogo = ({ teamId }) => {
@@ -11,7 +12,7 @@ const TeamLogo = ({ teamId }) => {
   if (!teamId || hasError) {
     return (
       <div className={`${size} flex items-center justify-center text-gray-400 dark:text-gray-600`}>
-        {/* You could use a placeholder icon here if you want */}
+        {/* use a placeholder icon here */}
         <span className="text-xs">Logo</span>
       </div>
     );
@@ -38,11 +39,12 @@ const MatchesPage = () => {
  const [selectedDate, setSelectedDate] = useState(new Date());
  const [matchScores, setMatchScores] = useState({}); //match scores
  const [availableConferences, setAvailableConferences] = useState(new Set());
+ const navigate = useNavigate();
  const [filters, setFilters] = useState({
   gender: '',
   conference: '',
   sort: 'time-asc'
-});
+  });
 
 // Sort matches by time
 const sortedMatches = useMemo(() => {
@@ -121,48 +123,94 @@ const fetchTeams = async (matchesData) => {
 
 // Fetch matches with teams
 useEffect(() => {
+  const abortController = new AbortController();
+  let isMounted = true;
+
   const fetchData = async () => {
     try {
+      if (!isMounted) return;
       setLoading(true);
+      
       const dateStr = selectedDate.toISOString().split('T')[0];
-      let matchesData = await api.matches.getAll(dateStr);
-  
+      let matchesData = await api.matches.getAll(dateStr, abortController.signal);
+      
+      if (!isMounted) return;
+
+      // First get all team data
+      const teamIds = new Set();
+      matchesData.forEach(match => {
+        teamIds.add(match.home_team_id);
+        teamIds.add(match.away_team_id);
+      });
+
+      // Fetch all team data in parallel
+      const teamPromises = Array.from(teamIds).map(teamId => 
+        api.teams.getById(teamId, abortController.signal)
+      );
+      const teamResults = await Promise.all(teamPromises);
+      
+      if (!isMounted) return;
+
+      // Create teams map
+      const teamsMap = {};
+      const conferences = new Set();
+      teamResults.forEach(team => {
+        teamsMap[team.id] = team;
+        if (team.conference) {
+          conferences.add(team.conference);
+        }
+      });
+
       // Apply filters
+      let filteredMatches = matchesData;
       if (filters.gender) {
-        matchesData = matchesData.filter(match => match.gender === filters.gender);
+        filteredMatches = filteredMatches.filter(match => match.gender === filters.gender);
       }
       if (filters.conference) {
-        matchesData = matchesData.filter(match => {
-          const homeTeam = teams[match.home_team_id];
-          const awayTeam = teams[match.away_team_id];
+        filteredMatches = filteredMatches.filter(match => {
+          const homeTeam = teamsMap[match.home_team_id];
+          const awayTeam = teamsMap[match.away_team_id];
           return homeTeam?.conference === filters.conference || awayTeam?.conference === filters.conference;
         });
       }
-  
-      // Fetch scores for completed matches
-      const scoresPromises = matchesData
-        .filter(match => match.completed)
-        .map(match => api.matches.getScore(match.id));
+
+      // Fetch scores for completed matches in parallel
+      const completedMatches = filteredMatches.filter(match => match.completed);
+      const scorePromises = completedMatches.map(match => 
+        api.matches.getScore(match.id, abortController.signal)
+      );
+      const scoreResults = await Promise.all(scorePromises);
       
-      const scoreResults = await Promise.all(scoresPromises);
+      if (!isMounted) return;
+
+      // Create scores map
       const scoresMap = {};
-      matchesData
-        .filter(match => match.completed)
-        .forEach((match, index) => {
-          scoresMap[match.id] = scoreResults[index];
-        });
-  
+      completedMatches.forEach((match, index) => {
+        scoresMap[match.id] = scoreResults[index];
+      });
+
+      // Set all state at once
+      setMatches(filteredMatches);
+      setTeams(teamsMap);
       setMatchScores(scoresMap);
-      setMatches(matchesData);
-      await fetchTeams(matchesData);
+      setAvailableConferences(conferences);
+      
     } catch (err) {
+      if (!isMounted) return;
+      if (err.name === 'AbortError') return;
       setError(err.message);
     } finally {
+      if (!isMounted) return;
       setLoading(false);
     }
   };
 
   fetchData();
+
+  return () => {
+    isMounted = false;
+    abortController.abort();
+  };
 }, [selectedDate, filters]);
 
  // Get team name helper
@@ -270,7 +318,8 @@ useEffect(() => {
       ) : (
         sortedMatches.map(match => (
           <div key={match.id} 
-              className={`relative bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg
+            onClick={() => navigate(`/matches/${match.id}`)}
+            className={`relative bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg
                         hover:shadow-xl transition-shadow cursor-pointer
                         ${match.is_conference_match ? 'border-l-4 border-primary-500 dark:border-primary-400' : ''}`}>
             <div className="flex flex-col">
@@ -313,7 +362,17 @@ useEffect(() => {
                         })()}
                       </span>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {formatMatchTime(match.scheduled_time, match.timezone).split(' ').pop()}
+                        {(() => {
+                          try {
+                            if (!match.scheduled_time) return '';
+                            const date = new Date(match.scheduled_time + 'Z');
+                            if (isNaN(date.getTime())) return '';
+                            return formatMatchTime(match.scheduled_time, match.timezone).split(' ').pop()
+                          } catch (e) {
+                            return '';
+                          }
+                        })()}
+                        
                       </span>
                     </>
                   )}

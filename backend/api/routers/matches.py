@@ -9,15 +9,6 @@ from api.database import get_db
 
 router = APIRouter()
 
-# @router.get("/", response_model=List[MatchResponse])
-# def get_matches(
-#     date: Optional[date] = None,
-#     team_id: Optional[str] = None,
-#     db: Session = Depends(get_db)
-# ):
-#     service = MatchService(db)
-#     return service.get_matches(date=date, team_id=team_id)
-
 @router.get("/", response_model=List[MatchResponse])
 def get_matches(
     date: Optional[date] = None,

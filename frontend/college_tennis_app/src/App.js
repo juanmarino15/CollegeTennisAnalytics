@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-do
 import { Home, Users, Calendar, Award, Menu, Sun, Moon } from 'lucide-react';
 import HomePage from './pages/HomePage';
 import MatchesPage from './pages/MatchesPage';
+import MatchDetailsPage from './pages/MatchDetailsPage';
 // import TeamsPage from './pages/TeamsPage';
 // import RankingsPage from './pages/RankingsPage';
 
@@ -93,6 +94,7 @@ const App = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/matches" element={<MatchesPage />} />
+          <Route path="/matches/:matchId" element={<MatchDetailsPage />} />
           {/* <Route path="/teams" element={<TeamsPage />} />
           <Route path="/rankings" element={<RankingsPage />} /> */}
         </Routes>

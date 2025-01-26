@@ -3,24 +3,24 @@ const BASE_URL = 'http://localhost:8000/api/v1';
 export const api = {
   // Matches endpoints
   matches: {
-    getAll: async (date) => {
+    getAll: async (date, signal) => {
       const params = date ? `?date=${date}` : '';
-      const response = await fetch(`${BASE_URL}/matches${params}`);
+      const response = await fetch(`${BASE_URL}/matches${params}`, { signal });
       if (!response.ok) throw new Error('Failed to fetch matches');
       return response.json();
     },
-    getById: async (id) => {
-      const response = await fetch(`${BASE_URL}/matches/${id}`);
+    getById: async (id, signal) => {
+      const response = await fetch(`${BASE_URL}/matches/${id}`, { signal });
       if (!response.ok) throw new Error('Failed to fetch match');
       return response.json();
     },
-    getLineup: async (id) => {
-      const response = await fetch(`${BASE_URL}/matches/${id}/lineup`);
+    getLineup: async (id, signal) => {
+      const response = await fetch(`${BASE_URL}/matches/${id}/lineup`, { signal });
       if (!response.ok) throw new Error('Failed to fetch match lineup');
       return response.json();
     },
-    getScore: async (id) => {
-      const response = await fetch(`${BASE_URL}/matches/${id}/score`);
+    getScore: async (id, signal) => {
+      const response = await fetch(`${BASE_URL}/matches/${id}/score`, { signal });
       if (!response.ok) throw new Error('Failed to fetch match score');
       return response.json();
     }
@@ -28,18 +28,18 @@ export const api = {
 
   // Teams endpoints
   teams: {
-    getAll: async () => {
-      const response = await fetch(`${BASE_URL}/teams`);
+    getAll: async (signal) => {
+      const response = await fetch(`${BASE_URL}/teams`, { signal });
       if (!response.ok) throw new Error('Failed to fetch teams');
       return response.json();
     },
-    getById: async (id) => {
-      const response = await fetch(`${BASE_URL}/teams/${id}`);
+    getById: async (id, signal) => {
+      const response = await fetch(`${BASE_URL}/teams/${id}`, { signal });
       if (!response.ok) throw new Error('Failed to fetch team');
       return response.json();
     },
-    getLogo: async (id) => {
-      const response = await fetch(`${BASE_URL}/teams/${id}/logo`);
+    getLogo: async (id, signal) => {
+      const response = await fetch(`${BASE_URL}/teams/${id}/logo`, { signal });
       if (!response.ok) throw new Error('Failed to fetch team logo');
       return response.blob();
     }
