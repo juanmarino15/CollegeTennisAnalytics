@@ -43,5 +43,14 @@ export const api = {
       if (!response.ok) throw new Error('Failed to fetch team logo');
       return response.blob();
     }
+  },
+
+  players: {
+    getById: async (id, signal) => {
+      const response = await fetch(`${BASE_URL}/players/${id}`, { signal });
+      if (!response.ok) throw new Error('Failed to fetch player');
+      return response.json();
+    }
   }
 };
+
