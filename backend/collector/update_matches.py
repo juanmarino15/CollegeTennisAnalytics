@@ -99,7 +99,7 @@ class MatchUpdatesService:
             "limit": limit,
             "sort": {
                 "field": "START_DATE",
-                "direction": "DESCENDING" if is_completed else "ASCENDING"
+                "direction": "DESCENDING" 
             },
             "filter": {
                 "seasonStarting": "2024",
@@ -158,13 +158,26 @@ class MatchUpdatesService:
             matches = batch_data['items']
             total_items = batch_data.get('totalItems', 0)
             
+            future_match_count = 0  # Counter for future matches in this batch
+            should_skip_batch = False  # Flag to indicate if we should skip to next batch
+
             for match_data in matches:
                 try:
                     # Parse match date and get just the date part
                     match_date_str = match_data['startDateTime']['dateTimeString']
                     match_date = datetime.fromisoformat(match_date_str.replace('Z', '+00:00')).date()
+                    
+                    # Get today's date and calculate one month from now
+                    today = datetime.now().date()
+                    one_month_future = today + timedelta(days=15)
 
-                    # If we hit a match before January 1st, stop processing
+                    # If we hit matches more than a month in the future, skip to next batch
+                    if match_date > one_month_future:
+                        logging.info(f"Found match on {match_date} (more than a month away). Skipping to next batch.")
+                        should_skip_batch = True
+                        break  # Break out of the for loop
+
+                    # If we hit a match before January 1st, stop processing completely
                     if match_date < cutoff_date:
                         logging.info(f"Reached match before January 1st (date: {match_date}). Stopping processing.")
                         return total_processed
@@ -183,13 +196,16 @@ class MatchUpdatesService:
                     logging.error(f"Error processing {match_type} match {match_id}: {str(e)}")
                     continue
 
+            if should_skip_batch:
+                skip += limit
+                continue  # Skip to next iteration of while loop
+
             logging.info(f"Processed {total_processed} out of {total_items} {match_type} matches")
             
             if len(matches) < limit:
                 break
                 
             skip += limit
-                
             await asyncio.sleep(1)
 
         return total_processed
@@ -204,9 +220,9 @@ class MatchUpdatesService:
             logging.info(f"Completed processing {completed_count} completed matches")
 
             # Process upcoming matches
-            # logging.info("Processing upcoming matches...")
-            # upcoming_count = await self.process_matches_batch(is_completed=False)
-            # logging.info(f"Completed processing {upcoming_count} upcoming matches")
+            logging.info("Processing upcoming matches...")
+            upcoming_count = await self.process_matches_batch(is_completed=False)
+            logging.info(f"Completed processing {upcoming_count} upcoming matches")
 
         except Exception as e:
             logging.error(f"Error in update_matches: {str(e)}")

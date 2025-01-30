@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, Users, Calendar, Award, Menu, Sun, Moon } from 'lucide-react';
-import HomePage from './pages/HomePage';
-import MatchesPage from './pages/MatchesPage';
-import MatchDetailsPage from './pages/MatchDetailsPage';
+import React, { useState, useEffect } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useLocation,
+} from "react-router-dom";
+import { Home, Users, Calendar, Award, Menu, Sun, Moon } from "lucide-react";
+import HomePage from "./pages/HomePage";
+import MatchesPage from "./pages/MatchesPage";
+import MatchDetailsPage from "./pages/MatchDetailsPage";
 // import TeamsPage from './pages/TeamsPage';
 // import RankingsPage from './pages/RankingsPage';
 
@@ -12,16 +18,16 @@ const ThemeToggle = () => {
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
-    document.documentElement.classList.add('dark');
+    document.documentElement.classList.add("dark");
   }, []);
 
   const toggleTheme = () => {
     setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
+    document.documentElement.classList.toggle("dark");
   };
 
   return (
-    <button 
+    <button
       onClick={toggleTheme}
       className="p-2 rounded-full text-gray-600 dark:text-dark-text hover:bg-gray-100 dark:hover:bg-dark-card"
     >
@@ -36,12 +42,13 @@ const NavLink = ({ to, icon, label }) => {
   const isActive = location.pathname === to;
 
   return (
-    <Link 
-      to={to} 
+    <Link
+      to={to}
       className={`flex flex-col items-center py-2 px-3 
-        ${isActive 
-          ? 'text-primary-500 dark:text-primary-400' 
-          : 'text-gray-600 dark:text-dark-text-dim'
+        ${
+          isActive
+            ? "text-primary-500 dark:text-primary-400"
+            : "text-gray-600 dark:text-dark-text-dim"
         }
         hover:text-primary-600 dark:hover:text-primary-300`}
     >
@@ -58,7 +65,9 @@ const Layout = ({ children }) => {
       {/* Mobile Header */}
       <header className="sticky top-0 z-10 bg-white dark:bg-dark-nav border-b border-gray-200 dark:border-dark-border">
         <div className="px-4 h-14 flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-dark-text">College Tennis</h1>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-dark-text">
+            College Tennis
+          </h1>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <button className="p-2 hover:bg-gray-100 dark:hover:bg-dark-border rounded-full">
@@ -69,9 +78,7 @@ const Layout = ({ children }) => {
       </header>
 
       {/* Main Content */}
-      <main className="px-4 pb-24">
-        {children}
-      </main>
+      <main className="px-4 pb-24">{children}</main>
 
       {/* Mobile Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-dark-nav border-t border-gray-200 dark:border-dark-border z-10">
