@@ -10,7 +10,8 @@ import { Home, Users, Calendar, Award, Menu, Sun, Moon } from "lucide-react";
 import HomePage from "./pages/HomePage";
 import MatchesPage from "./pages/MatchesPage";
 import MatchDetailsPage from "./pages/MatchDetailsPage";
-// import TeamsPage from './pages/TeamsPage';
+import TeamsPage from "./pages/TeamsPage";
+import TeamDetailsPage from "./pages/TeamsDetailsPage";
 // import RankingsPage from './pages/RankingsPage';
 
 // Theme toggle component
@@ -102,8 +103,8 @@ const App = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/matches/:matchId" element={<MatchDetailsPage />} />
-          {/* <Route path="/teams" element={<TeamsPage />} />
-          <Route path="/rankings" element={<RankingsPage />} /> */}
+          <Route path="/teams" element={<TeamsPage />} />
+          <Route path="/teams/:teamId" element={<TeamDetailsPage />} />
         </Routes>
       </Layout>
     </BrowserRouter>

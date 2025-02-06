@@ -64,26 +64,31 @@ class TeamService:
         return None
     
     def get_roster(self, team_id: str, year: str = None):
-            if team_id:
-                upper_team_id = team_id.upper()
-                
-                # Get season_id for the year
-                if year:
-                    season = self.db.query(Season).filter(
-                        Season.name.ilike(f"%{year}%")
-                    ).first()
-                    
-                    if not season:
-                        return []
-                    
-                    players = (
-                        self.db.query(Player)
-                        .join(PlayerRoster)
-                        .filter(
-                            func.upper(PlayerRoster.team_id) == upper_team_id,
-                            PlayerRoster.season_id == season.id
-                        )
-                        .all()
-                    )
-                    return [self._player_to_dict(player) for player in players]
-            return []
+        if team_id:
+            upper_team_id = team_id.upper()
+
+            # If no year is provided, get the latest season
+            if not year:
+                latest_season = self.db.query(Season).order_by(Season.name.desc()).first()
+                if latest_season:
+                    year = latest_season.name
+                else:
+                    return []
+
+            # Get season_id for the year
+            season = self.db.query(Season).filter(Season.name.ilike(f"%{year}%")).first()
+            
+            if not season:
+                return []
+            
+            players = (
+                self.db.query(Player)
+                .join(PlayerRoster)
+                .filter(
+                    func.upper(PlayerRoster.team_id) == upper_team_id,
+                    PlayerRoster.season_id == season.id
+                )
+                .all()
+            )
+            return [self._player_to_dict(player) for player in players]
+        return []
