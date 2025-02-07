@@ -53,8 +53,9 @@ export const api = {
       if (!response.ok) throw new Error("Failed to fetch team logo");
       return response.blob();
     },
-    getRoster: async (id, signal) => {
-      const response = await fetch(`${BASE_URL}/teams/${id}/roster`, {
+    getRoster: async (id, year = null, signal) => {
+      const params = year ? `?year=${year}` : "";
+      const response = await fetch(`${BASE_URL}/teams/${id}/roster${params}`, {
         signal,
       });
       if (!response.ok) throw new Error("Failed to fetch team roster");
