@@ -28,6 +28,8 @@ class StatsService:
         return {
             "total_wins": stats['total_wins'],
             "total_losses": stats['total_losses'],
+            "conference_wins": stats['conference_wins'],  # Add this
+            "conference_losses": stats['conference_losses'],  # Add this
             "home_wins": stats['home_wins'],
             "home_losses": stats['home_losses'],
             "away_wins": stats['away_wins'],
@@ -82,52 +84,76 @@ class StatsService:
         return None
 
     def get_team_stats(self, team_id: str, season: str = None):
-        """Get team's overall record and stats"""
         if team_id:
             upper_team_id = team_id.upper()
             
-            # Base query
-            query = self.db.query(MatchTeam).join(Match)
+            # Base query with explicit join
+            query = self.db.query(MatchTeam, Match).join(
+                Match, MatchTeam.match_id == Match.id
+            )
             
             # Add season filter if provided
             if season:
-                year = int(season)
-                season_start = datetime(year, 8, 1)
-                season_end = datetime(year + 1, 7, 31)
-                query = query.filter(
-                    Match.start_date.between(season_start, season_end)
-                )
+                try:
+                    year = int(season)
+                    season_start = datetime(year, 8, 1)
+                    season_end = datetime(year + 1, 7, 31)
+                    query = query.filter(
+                        Match.start_date.between(season_start, season_end)
+                    )
+                except ValueError:
+                    return None
             
             # Get matches for this team
-            matches = query.filter(
-                func.upper(MatchTeam.team_id) == upper_team_id
+            results = query.filter(
+                func.upper(MatchTeam.team_id) == upper_team_id,
+                Match.completed == True
             ).all()
+            
+            print(f"Total matches found: {len(results)}")  # Debug print
             
             stats = {
                 'total_wins': 0,
                 'total_losses': 0,
+                'conference_wins': 0,
+                'conference_losses': 0,
                 'home_wins': 0,
                 'home_losses': 0,
                 'away_wins': 0,
                 'away_losses': 0,
-                'total_matches': len(matches)
+                'total_matches': len(results)
             }
             
-            for match in matches:
-                if match.is_home_team:
-                    if match.did_win:
+            for match_team, match in results:
+
+                
+                if match_team.is_home_team:
+                    if match_team.did_win:
                         stats['home_wins'] += 1
                         stats['total_wins'] += 1
+                        if match.is_conference_match:
+                            print(f"Adding conference win for match {match.id}")  # Debug print
+                            stats['conference_wins'] += 1
                     else:
                         stats['home_losses'] += 1
                         stats['total_losses'] += 1
+                        if match.is_conference_match:
+                            print(f"Adding conference loss for match {match.id}")  # Debug print
+                            stats['conference_losses'] += 1
                 else:
-                    if match.did_win:
+                    if match_team.did_win:
                         stats['away_wins'] += 1
                         stats['total_wins'] += 1
+                        if match.is_conference_match:
+                            print(f"Adding conference win for match {match.id}")  # Debug print
+                            stats['conference_wins'] += 1
                     else:
                         stats['away_losses'] += 1
                         stats['total_losses'] += 1
-            
+                        if match.is_conference_match:
+                            print(f"Adding conference loss for match {match.id}")  # Debug print
+                            stats['conference_losses'] += 1
+                
+
             return self._team_stats_to_dict(stats)
         return None

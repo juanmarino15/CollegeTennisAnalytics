@@ -18,6 +18,7 @@ def get_matches(
     service = MatchService(db)
     return service.get_matches(date=date, team_id=team_id)
 
+
 @router.get("/{match_id}", response_model=MatchResponse)
 def get_match(match_id: str, db: Session = Depends(get_db)):
     service = MatchService(db)

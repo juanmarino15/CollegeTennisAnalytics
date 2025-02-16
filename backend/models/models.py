@@ -29,6 +29,8 @@ class Match(Base):
     away_team = relationship("Team", foreign_keys=[away_team_id], back_populates="away_matches")
     web_links = relationship("WebLink", back_populates="match")
     location = relationship("Location", back_populates="match", uselist=False)
+    teams = relationship("MatchTeam", back_populates="match")
+
 
 class Team(Base):
     __tablename__ = 'teams'
@@ -57,6 +59,9 @@ class MatchTeam(Base):
     is_home_team = Column(Boolean)
     order_of_play = Column(Integer)
     team_position = Column(String)  # 'home' or 'away'
+
+    match = relationship("Match", back_populates="teams")
+
 
 class WebLink(Base):
     __tablename__ = 'web_links'

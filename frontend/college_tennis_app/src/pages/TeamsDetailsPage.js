@@ -63,8 +63,14 @@ const TeamDetailsPage = () => {
             api.teams.getById(teamId, abortController.signal),
             api.teams.getRoster(teamId, selectedSeason, abortController.signal),
             api.matches.getByTeam(teamId, abortController.signal),
-            api.stats.getTeamStats(teamId, abortController.signal),
+            api.stats.getTeamStats(
+              teamId,
+              selectedSeason,
+              abortController.signal
+            ),
           ]);
+
+        console.log("Received matches data:", matchesData); // Add this debug log
 
         setTeam(teamData);
         setRoster(rosterData);
@@ -242,21 +248,6 @@ const TeamDetailsPage = () => {
               <Calendar className="w-5 h-5" />
               Schedule & Results
             </h2>
-
-            {/* Date Selector */}
-            <div className="w-full sm:w-auto flex items-center gap-2">
-              <div className="flex-1 sm:flex-none">
-                <input
-                  type="date"
-                  value={selectedDate.toISOString().split("T")[0]}
-                  onChange={handleDateChange}
-                  className="w-full sm:w-auto px-3 py-1.5 bg-gray-50 dark:bg-dark-card border 
-                           border-gray-200 dark:border-dark-border rounded-lg text-sm
-                           text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500
-                           appearance-none cursor-pointer"
-                />
-              </div>
-            </div>
           </div>
 
           <div className="space-y-3">

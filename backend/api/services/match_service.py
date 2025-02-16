@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, cast, Date 
 from models import Match, MatchLineup, MatchTeam
 from datetime import date
+from sqlalchemy.orm import joinedload
 
 class MatchService:
     def __init__(self, db: Session):
@@ -39,8 +40,16 @@ class MatchService:
             "side2_score": lineup.side2_score,
             "side2_won": lineup.side2_won
         }
+    
+    def _team_match_to_dict(self, match):
+        """Convert Match model to dictionary with team names"""
+        base_dict = self._match_to_dict(match)
+        base_dict.update({
+            "home_team_name": match.home_team.name if match.home_team else None,
+            "away_team_name": match.away_team.name if match.away_team else None,
+        })
+        return base_dict
 
-    from sqlalchemy import func, cast, Date
 
     def get_matches(self, date: date = None, team_id: str = None):
         query = self.db.query(Match)
@@ -55,6 +64,25 @@ class MatchService:
             )
         matches = query.all()
         return [self._match_to_dict(match) for match in matches]
+    
+    def get_team_matches(self, date: date = None, team_id: str = None):
+        # New method for team details page with team names
+        query = self.db.query(Match).options(
+            joinedload(Match.home_team),
+            joinedload(Match.away_team)
+        )
+        
+        if date:
+            query = query.filter(cast(Match.start_date, Date) == date)
+        if team_id:
+            upper_team_id = team_id.upper() if team_id else None
+            query = query.filter(
+                (func.upper(Match.home_team_id) == upper_team_id) | 
+                (func.upper(Match.away_team_id) == upper_team_id)
+            )
+        
+        matches = query.all()
+        return [self._team_match_to_dict(match) for match in matches]
 
     def get_match(self, match_id: str):
         if match_id:

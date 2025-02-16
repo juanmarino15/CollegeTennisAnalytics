@@ -65,8 +65,11 @@ export const api = {
 
   // Stats endpoints
   stats: {
-    getTeamStats: async (id, signal) => {
-      const response = await fetch(`${BASE_URL}/stats/teams/${id}`, { signal });
+    getTeamStats: async (id, season = null, signal) => {
+      const params = season ? `?season=${season}` : "";
+      const response = await fetch(`${BASE_URL}/stats/teams/${id}${params}`, {
+        signal,
+      });
       if (!response.ok) throw new Error("Failed to fetch team stats");
       return response.json();
     },
