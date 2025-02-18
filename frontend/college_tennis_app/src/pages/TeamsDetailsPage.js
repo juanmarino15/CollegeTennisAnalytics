@@ -42,6 +42,7 @@ const TeamDetailsPage = () => {
   const [selectedSeason, setSelectedSeason] = useState("2024");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [seasons] = useState(["2024", "2023", "2022", "2021"]);
+  const [allMatches, setAllMatches] = useState([]);
 
   const handleSeasonChange = (e) => {
     setSelectedSeason(e.target.value);
@@ -58,11 +59,15 @@ const TeamDetailsPage = () => {
       try {
         setLoading(true);
         const dateStr = selectedDate.toISOString().split("T")[0];
-        const [teamData, rosterData, matchesData, statsData] =
+        const [teamData, rosterData, matchesData, statsData, allMatches] =
           await Promise.all([
             api.teams.getById(teamId, abortController.signal),
             api.teams.getRoster(teamId, selectedSeason, abortController.signal),
-            api.matches.getByTeam(teamId, abortController.signal),
+            api.matches.getAllByTeam(
+              teamId,
+              selectedSeason,
+              abortController.signal
+            ),
             api.stats.getTeamStats(
               teamId,
               selectedSeason,
@@ -70,11 +75,10 @@ const TeamDetailsPage = () => {
             ),
           ]);
 
-        console.log("Received matches data:", matchesData); // Add this debug log
-
         setTeam(teamData);
         setRoster(rosterData);
         setMatches(matchesData);
+
         setStats(statsData);
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -250,54 +254,103 @@ const TeamDetailsPage = () => {
             </h2>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {matches.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                No matches scheduled for this date
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-sm">
+                No matches scheduled
               </div>
             ) : (
               matches.map((match) => (
                 <div
                   key={match.id}
                   onClick={() => navigate(`/matches/${match.id}`)}
-                  className="p-4 bg-gray-50 dark:bg-dark-card rounded-lg shadow border border-gray-200 
-                            dark:border-dark-border active:bg-gray-100 dark:active:bg-gray-700/50 transition-colors"
+                  className="bg-white dark:bg-dark-card rounded-lg shadow border border-gray-200 
+                dark:border-dark-border hover:shadow-md transition-shadow cursor-pointer"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        {match.is_conference_match && (
-                          <span
-                            className="text-xs px-2 py-0.5 bg-primary-100/80 dark:bg-primary-900/20 
-                                     text-primary-700 dark:text-primary-300 rounded-full"
+                  <div className="p-3">
+                    <div className="relative">
+                      {/* Result/Time - Absolute positioned */}
+                      <div
+                        className="absolute top-0 "
+                        style={{ right: "-4px" }}
+                      >
+                        {match.completed ? (
+                          <div
+                            className="inline-block px-1 py-0.5 rounded border border-green-500 
+                        text-green-600 text-[9px] font-medium"
                           >
-                            Conference
-                          </span>
+                            W, 5-2
+                          </div>
+                        ) : (
+                          <div
+                            className="text-[9px] font-medium text-gray-900 dark:text-dark-text"
+                            style={{ right: "-4px" }}
+                          >
+                            {match.scheduled_time
+                              ? new Date(
+                                  match.scheduled_time + "Z"
+                                ).toLocaleTimeString("en-US", {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                })
+                              : "TBA"}
+                          </div>
                         )}
-                        <span className="font-medium text-gray-900 dark:text-dark-text">
-                          {match.home_team_id === team.id ? "vs " : "@ "}
-                          {match.home_team_id === team.id
-                            ? match.away_team_name
-                            : match.home_team_name}
-                        </span>
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(match.start_date).toLocaleDateString()} •
-                        {match.completed
-                          ? " Final"
-                          : match.scheduled_time
-                          ? ` ${new Date(
-                              match.scheduled_time + "Z"
-                            ).toLocaleTimeString("en-US", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                              timeZone: match.timezone,
-                            })}`
-                          : " TBA"}
+
+                      {/* Main Content Grid */}
+                      <div className="grid grid-cols-12 items-center gap-2">
+                        {/* Left Side - Game Info */}
+                        <div className="col-span-3">
+                          <div className="text-[9px] uppercase text-gray-500 dark:text-gray-400">
+                            {match.home_team_id === team.id ? "HOME" : "AWAY"}
+                          </div>
+                          <div className="text-xs font-bold text-gray-900 dark:text-dark-text">
+                            {new Date(match.start_date)
+                              .toLocaleDateString("en-US", {
+                                weekday: "short",
+                              })
+                              .toUpperCase()}
+                            .
+                          </div>
+                          <div className="text-xs font-bold text-gray-900 dark:text-dark-text">
+                            JAN {new Date(match.start_date).getDate()}
+                          </div>
+                        </div>
+
+                        {/* Team Logo */}
+                        <div className="flex justify-center col-span-2">
+                          <TeamLogo
+                            teamId={
+                              match.home_team_id === team.id
+                                ? match.away_team_id
+                                : match.home_team_id
+                            }
+                            size="w-8 h-8"
+                          />
+                        </div>
+
+                        {/* Team Name */}
+                        <div className="col-span-7 pr-8">
+                          <div className="text-[9px] font-medium text-gray-900 dark:text-dark-text">
+                            {match.home_team_id === team.id
+                              ? match.away_team_name
+                              : match.home_team_name}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  </div>
+
+                  {/* Bottom Actions */}
+                  <div className="border-t border-gray-200 dark:border-dark-border px-3 py-1.5 flex gap-4">
+                    <button className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
+                      Box Score
+                    </button>
+                    <button className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
+                      Recap
+                    </button>
                   </div>
                 </div>
               ))

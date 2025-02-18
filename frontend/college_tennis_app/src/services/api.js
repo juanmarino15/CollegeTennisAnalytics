@@ -20,6 +20,17 @@ export const api = {
       if (!response.ok) throw new Error("Failed to fetch team matches");
       return response.json();
     },
+    getAllByTeam: async (teamId, season, signal) => {
+      const params = season ? `?season=${season}` : "";
+      const response = await fetch(
+        `${BASE_URL}/matches/by-team/${teamId}${params}`,
+        {
+          signal,
+        }
+      );
+      if (!response.ok) throw new Error("Failed to fetch team matches");
+      return response.json();
+    },
     getLineup: async (id, signal) => {
       const response = await fetch(`${BASE_URL}/matches/${id}/lineup`, {
         signal,

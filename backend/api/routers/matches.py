@@ -18,6 +18,13 @@ def get_matches(
     service = MatchService(db)
     return service.get_matches(date=date, team_id=team_id)
 
+# get all matches by team ID
+@router.get("/by-team/{team_id}", response_model=List[MatchResponse])
+def get_all_by_team(team_id: str,season:str, db: Session = Depends(get_db)):
+    service = MatchService(db)
+    data = service.get_all_by_team(team_id=team_id, season=season)
+    print("get_all_by_team data:", data)
+    return data
 
 @router.get("/{match_id}", response_model=MatchResponse)
 def get_match(match_id: str, db: Session = Depends(get_db)):

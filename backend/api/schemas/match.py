@@ -18,6 +18,8 @@ class MatchBase(BaseSchema):
     gender: str
     home_team_id: Optional[str]  # Make optional since some might be null
     away_team_id: Optional[str]
+    home_team_name: Optional[str] = None
+    away_team_name: Optional[str] = None
     season: str
     completed: bool
     scheduled_time: Optional[datetime]

@@ -93,6 +93,32 @@ class MatchService:
             return self._match_to_dict(match) if match else None
         return None
 
+    def get_all_by_team(self, team_id: str, season: str):
+        print("get_all_by_team called with team_id:", team_id, "season:", season)
+        if team_id:
+            upper_team_id = team_id.upper()
+            
+            # Start query with joins
+            query = (
+                self.db.query(Match)
+                .options(joinedload(Match.home_team), joinedload(Match.away_team))
+            )
+            
+            # Add team filter
+            query = query.filter(
+                (func.upper(Match.home_team_id) == upper_team_id) |
+                (func.upper(Match.away_team_id) == upper_team_id)
+            )
+            
+            # Add season filter if provided
+            if season:
+                query = query.filter(Match.season == season)
+                
+            # Get all matches and convert to dict
+            matches = query.order_by(Match.start_date).all()
+            dict_matches = [self._team_match_to_dict(match) for match in matches]
+            return dict_matches
+    
     def get_match_lineup(self, match_id: str):
         if match_id:
             upper_match_id = match_id.upper()
