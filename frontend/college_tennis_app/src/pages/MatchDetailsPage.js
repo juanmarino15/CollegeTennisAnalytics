@@ -183,13 +183,13 @@ const MatchDetailsPage = () => {
             />
             <div className="mt-2">
               <div
-                className={`text-base md:text-lg font-medium text-gray-900 dark:text-dark-text text-center
-                     ${match.is_conference_match ? "font-semibold" : ""}`}
+                className={`text-[11px] leading-[0.85rem] md:text-lg font-medium text-gray-900 dark:text-dark-text text-center
+                  ${match.is_conference_match ? "font-semibold" : ""}`}
               >
                 {teams.home.name}
               </div>
               {teams.home.conference && (
-                <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400 text-center">
+                <div className="text-[9px] leading-[0.85rem] md:text-sm text-gray-500 dark:text-gray-400 text-center">
                   {teams.home.conference.replace(/_/g, " ")}
                 </div>
               )}
@@ -235,14 +235,14 @@ const MatchDetailsPage = () => {
             />
             <div className="mt-2">
               <div
-                className={`text-base md:text-lg font-medium text-gray-900 dark:text-dark-text text-center
-                     ${match.is_conference_match ? "font-semibold" : ""}`}
+                className={`text-[11px] leading-[0.85rem] md:text-lg font-medium text-gray-900 dark:text-dark-text text-center
+    ${match.is_conference_match ? "font-semibold" : ""}`}
               >
                 {teams.away.name}
               </div>
-              {teams.away.conference && (
-                <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400 text-center">
-                  {teams.away.conference.replace(/_/g, " ")}
+              {teams.home.conference && (
+                <div className="text-[9px] leading-[0.85rem] md:text-sm text-gray-500 dark:text-gray-400 text-center">
+                  {teams.home.conference.replace(/_/g, " ")}
                 </div>
               )}
             </div>

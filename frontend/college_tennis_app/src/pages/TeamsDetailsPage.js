@@ -42,7 +42,7 @@ const TeamDetailsPage = () => {
   const [selectedSeason, setSelectedSeason] = useState("2024");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [seasons] = useState(["2024", "2023", "2022", "2021"]);
-  const [allMatches, setAllMatches] = useState([]);
+  const [matchScores, setMatchScores] = useState({});
 
   const handleSeasonChange = (e) => {
     setSelectedSeason(e.target.value);
@@ -75,11 +75,26 @@ const TeamDetailsPage = () => {
             ),
           ]);
 
+        // Get scores for completed matches
+        const completedMatches = matchesData.filter((match) => match.completed);
+        const scorePromises = completedMatches.map((match) =>
+          api.matches.getScore(match.id, abortController.signal)
+        );
+        const scores = await Promise.all(scorePromises);
+
+        // Create scores map
+        const scoresMap = {};
+        completedMatches.forEach((match, index) => {
+          scoresMap[match.id] = scores[index];
+        });
+
         setTeam(teamData);
         setRoster(rosterData);
         setMatches(matchesData);
-
+        setMatchScores(scoresMap);
         setStats(statsData);
+
+        console.log(scoresMap);
       } catch (err) {
         if (err.name === "AbortError") return;
         setError(err.message);
@@ -224,19 +239,16 @@ const TeamDetailsPage = () => {
                   <img
                     src={player.avatar_url}
                     alt={`${player.first_name} ${player.last_name}`}
-                    className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                    <User className="w-5 h-5 text-gray-400" />
+                  <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                    <User className="w-3 h-3 text-gray-400" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm text-gray-900 dark:text-dark-text">
                     {player.first_name} {player.last_name}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {player.class_year}
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -272,14 +284,38 @@ const TeamDetailsPage = () => {
                       {/* Result/Time - Absolute positioned */}
                       <div
                         className="absolute top-0 "
-                        style={{ right: "-4px" }}
+                        style={{ right: "-4px", top: "-10px" }}
                       >
                         {match.completed ? (
                           <div
-                            className="inline-block px-1 py-0.5 rounded border border-green-500 
-                        text-green-600 text-[9px] font-medium"
+                            className={`inline-block px-1 py-0.5 rounded border
+          ${
+            matchScores[match.id] &&
+            ((match.home_team_id === team.id &&
+              matchScores[match.id].home_team_won) ||
+              (match.away_team_id === team.id &&
+                matchScores[match.id].away_team_won))
+              ? "border-green-500 text-green-600"
+              : "border-red-500 text-red-600"
+          } text-[9px] font-medium`}
                           >
-                            W, 5-2
+                            {matchScores[match.id]
+                              ? match.home_team_id === team.id
+                                ? matchScores[match.id].home_team_won
+                                  ? `W, ${
+                                      matchScores[match.id].home_team_score
+                                    }-${matchScores[match.id].away_team_score}`
+                                  : `L, ${
+                                      matchScores[match.id].away_team_score
+                                    }-${matchScores[match.id].home_team_score}`
+                                : matchScores[match.id].away_team_won
+                                ? `W, ${
+                                    matchScores[match.id].away_team_score
+                                  }-${matchScores[match.id].home_team_score}`
+                                : `L, ${
+                                    matchScores[match.id].home_team_score
+                                  }-${matchScores[match.id].away_team_score}`
+                              : "Loading..."}
                           </div>
                         ) : (
                           <div
@@ -320,7 +356,10 @@ const TeamDetailsPage = () => {
                         </div>
 
                         {/* Team Logo */}
-                        <div className="flex justify-center col-span-2">
+                        <div
+                          className="flex justify-center col-span-2"
+                          style={{ justifyContent: "end" }}
+                        >
                           <TeamLogo
                             teamId={
                               match.home_team_id === team.id
@@ -341,16 +380,6 @@ const TeamDetailsPage = () => {
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Bottom Actions */}
-                  <div className="border-t border-gray-200 dark:border-dark-border px-3 py-1.5 flex gap-4">
-                    <button className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-                      Box Score
-                    </button>
-                    <button className="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-                      Recap
-                    </button>
                   </div>
                 </div>
               ))
