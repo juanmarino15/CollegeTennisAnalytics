@@ -553,15 +553,6 @@ class MatchUpdatesService:
                         side2_name = team.get('abbreviation')
                         break
                         
-            # If we couldn't find names by abbreviation, try using sideNumber
-            if side1_name is None or side2_name is None:
-                for team in match['teams']:
-                    if team.get('sideNumber') == 1:
-                        side1_name = team.get('name')
-                    elif team.get('sideNumber') == 2:
-                        side2_name = team.get('name')
-                print('side1 name', side1_name)
-                print('side2 name', side2_name)
 
         lineup = MatchLineup(
             id=tie_match['id'],
