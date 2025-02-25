@@ -189,6 +189,7 @@ class MatchUpdatesService:
                     lineup_data = await self.fetch_dual_match_details(match_id)
                     if lineup_data and 'data' in lineup_data and 'dualMatch' in lineup_data['data']:
                         await self.store_match_lineup(match_id, lineup_data)
+                        # await self.update_lineup_team_names(match_id, lineup_data)
                     
                     total_processed += 1
                 except Exception as e:
@@ -429,6 +430,79 @@ class MatchUpdatesService:
         finally:
             session.close()
 
+    async def update_lineup_team_names(self, match_id: str, match_data: Dict) -> None:
+        """Update team names in match lineups"""
+        if not self.Session:
+            raise RuntimeError("Database not initialized")
+            
+        session = self.Session()
+        try:
+            match = match_data['data']['dualMatch']
+            
+            # Check if match exists
+            existing_match = session.query(Match).get(match_id)
+            if not existing_match:
+                logging.warning(f"Match {match_id} not found in database")
+                return
+                
+            # Get existing lineups
+            existing_lineups = session.query(MatchLineup).filter_by(match_id=match_id).all()
+            if not existing_lineups:
+                logging.info(f"Match {match_id} has no lineups to update")
+                return
+            
+            # Create mapping of lineup ID to tie match data
+            tie_match_by_id = {tm['id']: tm for tm in match['tieMatchUps']}
+            
+            # Update each lineup
+            updates_count = 0
+            for lineup in existing_lineups:
+                try:
+                    # Find corresponding tie match
+                    tie_match = tie_match_by_id.get(lineup.id)
+                    if not tie_match:
+                        logging.warning(f"Couldn't find tie match data for lineup {lineup.id}")
+                        continue
+                    
+                    # Extract team names
+                    side1_name = None
+                    side2_name = None
+
+                    # Try to get team names from teamAbbreviation
+                    if tie_match['side1'].get('teamAbbreviation'):
+                        for team in match['teams']:
+                            if team.get('abbreviation') == tie_match['side1']['teamAbbreviation']:
+                                side1_name = team.get('abbreviation')
+                                break
+
+                    if tie_match['side2'].get('teamAbbreviation'):
+                        for team in match['teams']:
+                            if team.get('abbreviation') == tie_match['side2']['teamAbbreviation']:
+                                side2_name = team.get('abbreviation')
+                                break
+                    
+                    # Update the team names
+                    lineup.side1_name = side1_name
+                    lineup.side2_name = side2_name
+                    session.add(lineup)  # This is crucial - add the updated object back to session
+                    updates_count += 1
+                    
+                except Exception as e:
+                    logging.error(f"Error updating lineup {lineup.id}: {e}")
+                    continue
+                
+            if updates_count > 0:
+                session.commit()  # Commit the changes
+                logging.info(f"Successfully updated team names for {updates_count} lineups in match {match_id}")
+            else:
+                logging.info(f"No team name updates made for match {match_id}")
+            
+        except Exception as e:
+            logging.error(f"Error updating team names: {e}")
+            session.rollback()
+        finally:
+            session.close()
+
     def validate_lineup_data(self, tie_match: Dict) -> bool:
         """Validate lineup data is complete"""
         try:
@@ -470,13 +544,13 @@ class MatchUpdatesService:
             if tie_match['side1'].get('teamAbbreviation'):
                 for team in match['teams']:
                     if team.get('abbreviation') == tie_match['side1']['teamAbbreviation']:
-                        side1_name = team.get('name')
+                        side1_name = team.get('abbreviation')
                         break
 
             if tie_match['side2'].get('teamAbbreviation'):
                 for team in match['teams']:
                     if team.get('abbreviation') == tie_match['side2']['teamAbbreviation']:
-                        side2_name = team.get('name')
+                        side2_name = team.get('abbreviation')
                         break
                         
             # If we couldn't find names by abbreviation, try using sideNumber
