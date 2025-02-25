@@ -244,6 +244,9 @@ class MatchLineup(Base):
     side2_player2_id = Column(String, ForeignKey('players.person_id'), nullable=True)  # For doubles
     side2_score = Column(String)
     side2_won = Column(Boolean)
+
+    side1_name = Column(String, nullable=True)
+    side2_name = Column(String, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

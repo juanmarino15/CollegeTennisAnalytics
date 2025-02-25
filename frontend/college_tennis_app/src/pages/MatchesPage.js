@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Calendar, Clock, ChevronRight, ArrowUpDown } from "lucide-react";
+import { Calendar, Clock, ChevronDown, ArrowUpDown } from "lucide-react";
 import { api } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 // TeamLogo component with responsive sizing
 const TeamLogo = ({ teamId }) => {
@@ -28,6 +30,7 @@ const TeamLogo = ({ teamId }) => {
 };
 
 const MatchesPage = () => {
+  const [showFilters, setShowFilters] = useState(false);
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState({});
   const [loading, setLoading] = useState(true);
@@ -245,26 +248,111 @@ const MatchesPage = () => {
     <div className="py-4 space-y-4">
       {/* Date and Filters Section */}
       <div className="bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg">
-        <div className="flex flex-col sm:flex-row flex-wrap gap-4">
-          {/* Date selector - Full width on mobile, auto on larger screens */}
-          <div className="w-full sm:w-auto">
+        <div className="flex flex-col gap-4">
+          {/* Date selector - Always visible */}
+          <div className="w-full">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-primary-500 flex-shrink-0" />
-              <input
-                type="date"
-                value={selectedDate.toISOString().split("T")[0]}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                className="w-full sm:w-auto bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-          text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+              <DatePicker
+                selected={selectedDate}
+                onChange={(date) => setSelectedDate(date)}
+                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2
+                text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                dateFormat="yyyy-MM-dd"
+                placeholderText="Select a date"
               />
             </div>
           </div>
 
-          {/* Filters Container - Grid on mobile, flex-row on larger screens */}
-          <div className="grid grid-cols-1 sm:flex sm:flex-row gap-4">
+          {/* Collapsible Filters Section */}
+          <div className="sm:hidden">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="w-full flex items-center justify-between py-2 px-3 border border-gray-200 dark:border-dark-border rounded text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              <span>Filters & Sort</span>
+              <ChevronDown
+                className={`w-5 h-5 transition-transform ${
+                  showFilters ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {showFilters && (
+              <div className="mt-3 p-3 border border-gray-200 dark:border-dark-border rounded bg-white dark:bg-dark-card animate-fade-in space-y-3">
+                {/* Gender Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-600 dark:text-gray-400">
+                    Gender:
+                  </label>
+                  <select
+                    value={filters.gender}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        gender: e.target.value,
+                      }))
+                    }
+                    className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All</option>
+                    <option value="MALE">Men</option>
+                    <option value="FEMALE">Women</option>
+                  </select>
+                </div>
+
+                {/* Conference Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-600 dark:text-gray-400">
+                    Conference:
+                  </label>
+                  <select
+                    value={filters.conference}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        conference: e.target.value,
+                      }))
+                    }
+                    className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All Matches</option>
+                    {[...availableConferences].sort().map((conf) => (
+                      <option key={conf} value={conf}>
+                        {formatConferenceName(conf)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sort Filter */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm text-gray-600 dark:text-gray-400 flex items-center">
+                    <ArrowUpDown className="w-4 h-4 mr-1" />
+                    Sort by:
+                  </label>
+                  <select
+                    value={filters.sort}
+                    onChange={(e) =>
+                      setFilters((prev) => ({ ...prev, sort: e.target.value }))
+                    }
+                    className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="time-asc">Start Time (Earliest)</option>
+                    <option value="time-desc">Start Time (Latest)</option>
+                    <option value="conference">Conference First</option>
+                    <option value="completed">Completed First</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Regular Layout for Larger Screens */}
+          <div className="hidden sm:flex sm:flex-row sm:flex-wrap sm:gap-4">
             {/* Gender Filter */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap min-w-[60px]">
+              <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                 Gender:
               </label>
               <select
@@ -272,8 +360,7 @@ const MatchesPage = () => {
                 onChange={(e) =>
                   setFilters((prev) => ({ ...prev, gender: e.target.value }))
                 }
-                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">All</option>
                 <option value="MALE">Men</option>
@@ -283,7 +370,7 @@ const MatchesPage = () => {
 
             {/* Conference Filter */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap min-w-[60px]">
+              <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                 Conference:
               </label>
               <select
@@ -294,8 +381,7 @@ const MatchesPage = () => {
                     conference: e.target.value,
                   }))
                 }
-                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">All Matches</option>
                 {[...availableConferences].sort().map((conf) => (
@@ -308,7 +394,7 @@ const MatchesPage = () => {
 
             {/* Sort Filter */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap min-w-[60px] flex items-center">
+              <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap flex items-center">
                 <ArrowUpDown className="w-4 h-4 mr-1" />
                 Sort:
               </label>
@@ -317,8 +403,7 @@ const MatchesPage = () => {
                 onChange={(e) =>
                   setFilters((prev) => ({ ...prev, sort: e.target.value }))
                 }
-                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-2 py-1
-                        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
               >
                 <option value="time-asc">Start Time (Earliest)</option>
                 <option value="time-desc">Start Time (Latest)</option>

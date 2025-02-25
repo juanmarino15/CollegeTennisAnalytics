@@ -409,7 +409,7 @@ class MatchUpdatesService:
                         continue
 
                     # Create and store lineup
-                    lineup = self.create_lineup(match_id, tie_match)
+                    lineup = self.create_lineup(match_id, tie_match, match)
                     session.add(lineup)
                     
                     # Store set scores
@@ -454,11 +454,38 @@ class MatchUpdatesService:
         except Exception:
             return False
 
-    def create_lineup(self, match_id: str, tie_match: Dict) -> MatchLineup:
+    def create_lineup(self, match_id: str, tie_match: Dict, match: Dict = None) -> MatchLineup:
         """Create a MatchLineup instance"""
         # Get player IDs
         side1_player1_id = tie_match['side1']['participants'][0].get('personId')
         side2_player1_id = tie_match['side2']['participants'][0].get('personId')
+
+        # Get team names from team abbreviations
+        side1_name = None
+        side2_name = None
+
+        # If we have the match data with teams
+        if match and match.get('teams'):
+            # Try to get team names from teamAbbreviation
+            if tie_match['side1'].get('teamAbbreviation'):
+                for team in match['teams']:
+                    if team.get('abbreviation') == tie_match['side1']['teamAbbreviation']:
+                        side1_name = team.get('name')
+                        break
+
+            if tie_match['side2'].get('teamAbbreviation'):
+                for team in match['teams']:
+                    if team.get('abbreviation') == tie_match['side2']['teamAbbreviation']:
+                        side2_name = team.get('name')
+                        break
+                        
+            # If we couldn't find names by abbreviation, try using sideNumber
+            if side1_name is None or side2_name is None:
+                for team in match['teams']:
+                    if team.get('sideNumber') == 1:
+                        side1_name = team.get('name')
+                    elif team.get('sideNumber') == 2:
+                        side2_name = team.get('name')
 
         lineup = MatchLineup(
             id=tie_match['id'],
@@ -469,9 +496,11 @@ class MatchUpdatesService:
             side1_player1_id=side1_player1_id,
             side1_score=tie_match['side1']['score'].get('scoreString'),
             side1_won=tie_match['side1'].get('didWin', False),
+            side1_name=side1_name,  # Add the team name
             side2_player1_id=side2_player1_id,
             side2_score=tie_match['side2']['score'].get('scoreString'),
-            side2_won=tie_match['side2'].get('didWin', False)
+            side2_won=tie_match['side2'].get('didWin', False),
+            side2_name=side2_name  # Add the team name
         )
 
         # Add doubles partners if exists

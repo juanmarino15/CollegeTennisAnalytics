@@ -1387,6 +1387,32 @@ class TennisDataCollector:
                         print(f"Error accessing player data: {e}")
                         continue
 
+                    # Get team names from abbreviations
+                    side1_name = None
+                    side2_name = None
+
+                    if tie_match['side1'].get('teamAbbreviation'):
+                        # Find the team with this abbreviation
+                        for team in match['teams']:
+                            if team.get('abbreviation') == tie_match['side1']['teamAbbreviation']:
+                                side1_name = team.get('name')
+                                break
+
+                    if tie_match['side2'].get('teamAbbreviation'):
+                        # Find the team with this abbreviation
+                        for team in match['teams']:
+                            if team.get('abbreviation') == tie_match['side2']['teamAbbreviation']:
+                                side2_name = team.get('name')
+                                break
+
+                    # If we couldn't find names by abbreviation, try using sideNumber
+                    if side1_name is None or side2_name is None:
+                        for team in match['teams']:
+                            if team.get('sideNumber') == 1:
+                                side1_name = team.get('name')
+                            elif team.get('sideNumber') == 2:
+                                side2_name = team.get('name')
+
                     lineup = MatchLineup(
                         id=tie_match['id'],
                         match_id=match_id,
@@ -1396,9 +1422,11 @@ class TennisDataCollector:
                         side1_player1_id=side1_player1_id,
                         side1_score=side1_score,
                         side1_won=tie_match['side1'].get('didWin', False),
+                        side1_name=side1_name,  # Add the team name
                         side2_player1_id=side2_player1_id,
                         side2_score=side2_score,
-                        side2_won=tie_match['side2'].get('didWin', False)
+                        side2_won=tie_match['side2'].get('didWin', False),
+                        side2_name=side2_name  # Add the team name
                     )
                     
                     # Add doubles partners if exists
@@ -1458,7 +1486,6 @@ class TennisDataCollector:
             session.rollback()
         finally:
             session.close()
-
     def test_store_match_lineup(self, match_id: str):
         """Test fetching and storing a match lineup"""
         print(f"Fetching match {match_id} lineup data...")

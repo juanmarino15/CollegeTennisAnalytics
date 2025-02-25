@@ -35,10 +35,12 @@ class MatchService:
             "side1_player2_id": lineup.side1_player2_id,
             "side1_score": lineup.side1_score,
             "side1_won": lineup.side1_won,
+            "side1_name": lineup.side1_name,  # Add the team name
             "side2_player1_id": lineup.side2_player1_id,
             "side2_player2_id": lineup.side2_player2_id,
             "side2_score": lineup.side2_score,
-            "side2_won": lineup.side2_won
+            "side2_won": lineup.side2_won,
+            "side2_name": lineup.side2_name  # Add the team name
         }
     
     def _team_match_to_dict(self, match):

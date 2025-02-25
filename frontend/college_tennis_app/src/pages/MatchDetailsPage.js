@@ -331,11 +331,11 @@ const MatchDetailsPage = () => {
                       {/* Home Team Players */}
                       <div
                         className={`text-sm flex justify-between items-center py-2
-  ${
-    match.side1_won
-      ? "text-green-600 dark:text-green-400 font-semibold"
-      : "text-gray-600 dark:text-gray-400"
-  }`}
+                        ${
+                          match.side1_won
+                            ? "text-green-600 dark:text-green-400 font-semibold"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
                       >
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4" />
@@ -350,18 +350,25 @@ const MatchDetailsPage = () => {
                           )}
                         </div>
                         <div className="font-medium">
-                          {match.side1_score.split(" ")[0].split("-")[0]}
+                          {(() => {
+                            const scoreText = match.side1_score.split(" ")[0];
+                            // Remove any brackets and get first part of score
+                            const cleanedScore = scoreText
+                              .replace(/[\[\]]/g, "")
+                              .split("-")[0];
+                            return cleanedScore || "0";
+                          })()}
                         </div>
                       </div>
 
                       {/* Away Team Players */}
                       <div
                         className={`text-sm flex justify-between items-center py-2
-  ${
-    match.side2_won
-      ? "text-green-600 dark:text-green-400 font-semibold"
-      : "text-gray-600 dark:text-gray-400"
-  }`}
+                        ${
+                          match.side2_won
+                            ? "text-green-600 dark:text-green-400 font-semibold"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
                       >
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4" />
@@ -376,12 +383,17 @@ const MatchDetailsPage = () => {
                           )}
                         </div>
                         <div className="font-medium">
-                          {
-                            match.side1_score
-                              .split(" ")[0]
-                              .split("-")[1]
-                              .split("(")[0]
-                          }
+                          {(() => {
+                            const scoreText = match.side1_score.split(" ")[0];
+                            const cleanedScore = scoreText.replace(
+                              /[\[\]]/g,
+                              ""
+                            );
+                            const parts = cleanedScore.split("-");
+                            return parts.length > 1
+                              ? parts[1].split("(")[0]
+                              : "0";
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -424,11 +436,11 @@ const MatchDetailsPage = () => {
                       {/* Home Player */}
                       <div
                         className={`text-sm flex justify-between items-center py-2
-  ${
-    match.side1_won
-      ? "text-green-600 dark:text-green-400 font-semibold"
-      : "text-gray-600 dark:text-gray-400"
-  }`}
+                        ${
+                          match.side1_won
+                            ? "text-green-600 dark:text-green-400 font-semibold"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
                       >
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4" />
@@ -442,7 +454,9 @@ const MatchDetailsPage = () => {
                         </div>
                         <div className="font-medium space-x-2">
                           {match.side1_score.split(" ").map((set, index) => (
-                            <span key={index}>{set.split("-")[0]}</span>
+                            <span key={index}>
+                              {set.replace(/[\[\]]/g, "").split("-")[0]}
+                            </span>
                           ))}
                         </div>
                       </div>
@@ -450,11 +464,11 @@ const MatchDetailsPage = () => {
                       {/* Away Player */}
                       <div
                         className={`text-sm flex justify-between items-center py-2
-  ${
-    match.side2_won
-      ? "text-green-600 dark:text-green-400 font-semibold"
-      : "text-gray-600 dark:text-gray-400"
-  }`}
+                        ${
+                          match.side2_won
+                            ? "text-green-600 dark:text-green-400 font-semibold"
+                            : "text-gray-600 dark:text-gray-400"
+                        }`}
                       >
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4" />
@@ -469,7 +483,14 @@ const MatchDetailsPage = () => {
                         <div className="font-medium space-x-2">
                           {match.side1_score.split(" ").map((set, index) => (
                             <span key={index}>
-                              {set.split("-")[1].split("(")[0]}
+                              {(() => {
+                                const parts = set
+                                  .replace(/[\[\]]/g, "")
+                                  .split("-");
+                                return parts.length > 1
+                                  ? parts[1].split("(")[0]
+                                  : "0";
+                              })()}
                             </span>
                           ))}
                         </div>
