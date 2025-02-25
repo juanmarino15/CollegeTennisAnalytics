@@ -486,6 +486,8 @@ class MatchUpdatesService:
                         side1_name = team.get('name')
                     elif team.get('sideNumber') == 2:
                         side2_name = team.get('name')
+                print('side1 name', side1_name)
+                print('side2 name', side2_name)
 
         lineup = MatchLineup(
             id=tie_match['id'],
@@ -496,11 +498,11 @@ class MatchUpdatesService:
             side1_player1_id=side1_player1_id,
             side1_score=tie_match['side1']['score'].get('scoreString'),
             side1_won=tie_match['side1'].get('didWin', False),
-            side1_name=side1_name,  # Add the team name
+            side1_name=side1_name,  
             side2_player1_id=side2_player1_id,
             side2_score=tie_match['side2']['score'].get('scoreString'),
             side2_won=tie_match['side2'].get('didWin', False),
-            side2_name=side2_name  # Add the team name
+            side2_name=side2_name  
         )
 
         # Add doubles partners if exists
