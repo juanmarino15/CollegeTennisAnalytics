@@ -37,6 +37,9 @@ class MatchLineup(BaseSchema):
     side2_player2_id: Optional[str]
     side2_score: str
     side2_won: bool
+    side1_name: str
+    side2_name: str
+
 
 class MatchCreate(MatchBase):
     pass

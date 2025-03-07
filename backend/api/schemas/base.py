@@ -52,3 +52,5 @@ class MatchLineupBase(BaseSchema):
     side2_score: str
     side1_won: bool
     side2_won: bool
+    side1_name:str  
+    side2_name:str  

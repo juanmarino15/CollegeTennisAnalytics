@@ -343,7 +343,7 @@ const MatchDetailsPage = () => {
                             {formatPlayerName(players[match.side1_player1_id])}{" "}
                             /{" "}
                             {formatPlayerName(players[match.side1_player2_id])}{" "}
-                            [{teams.home.abbreviation}]
+                            [{match.side1_name}]
                           </span>
                           {match.side1_won && (
                             <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -376,7 +376,7 @@ const MatchDetailsPage = () => {
                             {formatPlayerName(players[match.side2_player1_id])}{" "}
                             /{" "}
                             {formatPlayerName(players[match.side2_player2_id])}{" "}
-                            [{teams.away.abbreviation}]
+                            [{match.side2_name}]
                           </span>
                           {match.side2_won && (
                             <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -446,7 +446,7 @@ const MatchDetailsPage = () => {
                           <User className="w-4 h-4" />
                           <span>
                             {formatPlayerName(players[match.side1_player1_id])}{" "}
-                            [{teams.home.abbreviation}]
+                            [{match.side1_name}]
                           </span>
                           {match.side1_won && (
                             <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -474,7 +474,7 @@ const MatchDetailsPage = () => {
                           <User className="w-4 h-4" />
                           <span>
                             {formatPlayerName(players[match.side2_player1_id])}{" "}
-                            [{teams.away.abbreviation}]
+                            [{match.side2_name}]
                           </span>
                           {match.side2_won && (
                             <Check className="w-4 h-4 text-green-600 dark:text-green-400" />

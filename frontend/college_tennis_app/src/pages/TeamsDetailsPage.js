@@ -149,7 +149,7 @@ const TeamDetailsPage = () => {
           <div className="flex flex-col items-center gap-4">
             <TeamLogo teamId={team.id} />
             <div className="text-center">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-dark-text">
+              <h1 className="text-lg font-bold text-gray-900 dark:text-dark-text">
                 {team.name}
               </h1>
               <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -277,7 +277,7 @@ const TeamDetailsPage = () => {
                   key={match.id}
                   onClick={() => navigate(`/matches/${match.id}`)}
                   className="bg-white dark:bg-dark-card rounded-lg shadow border border-gray-200 
-                dark:border-dark-border hover:shadow-md transition-shadow cursor-pointer"
+        dark:border-dark-border hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="p-3">
                     <div className="relative">
@@ -288,16 +288,14 @@ const TeamDetailsPage = () => {
                       >
                         {match.completed ? (
                           <div
-                            className={`inline-block px-1 py-0.5 rounded border
-          ${
-            matchScores[match.id] &&
-            ((match.home_team_id === team.id &&
-              matchScores[match.id].home_team_won) ||
-              (match.away_team_id === team.id &&
-                matchScores[match.id].away_team_won))
-              ? "border-green-500 text-green-600"
-              : "border-red-500 text-red-600"
-          } text-[9px] font-medium`}
+                            className={`inline-block px-1 py-0.5 md:px-1.5 md:py-1 rounded border
+  ${
+    matchScores[match.id] &&
+    ((match.home_team_id === team.id && matchScores[match.id].home_team_won) ||
+      (match.away_team_id === team.id && matchScores[match.id].away_team_won))
+      ? "border-green-500 text-green-600"
+      : "border-red-500 text-red-600"
+  } text-[9px] md:text-base font-medium`}
                           >
                             {matchScores[match.id]
                               ? match.home_team_id === team.id
@@ -319,7 +317,7 @@ const TeamDetailsPage = () => {
                           </div>
                         ) : (
                           <div
-                            className="text-[9px] font-medium text-gray-900 dark:text-dark-text"
+                            className="text-[9px] md:text-base font-medium text-gray-900 dark:text-dark-text"
                             style={{ right: "-4px" }}
                           >
                             {match.scheduled_time
@@ -336,13 +334,13 @@ const TeamDetailsPage = () => {
                       </div>
 
                       {/* Main Content Grid */}
-                      <div className="grid grid-cols-12 items-center gap-2">
+                      <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] items-center gap-2">
                         {/* Left Side - Game Info */}
                         <div className="col-span-3">
-                          <div className="text-[9px] uppercase text-gray-500 dark:text-gray-400">
+                          <div className="text-[9px] md:text-base uppercase text-gray-500 dark:text-gray-400">
                             {match.home_team_id === team.id ? "HOME" : "AWAY"}
                           </div>
-                          <div className="text-xs font-bold text-gray-900 dark:text-dark-text">
+                          <div className="text-xs md:text-base font-bold text-gray-900 dark:text-dark-text">
                             {new Date(match.start_date)
                               .toLocaleDateString("en-US", {
                                 weekday: "short",
@@ -350,7 +348,7 @@ const TeamDetailsPage = () => {
                               .toUpperCase()}
                             .
                           </div>
-                          <div className="text-xs font-bold text-gray-900 dark:text-dark-text">
+                          <div className="text-xs md:text-base font-bold text-gray-900 dark:text-dark-text">
                             JAN {new Date(match.start_date).getDate()}
                           </div>
                         </div>
@@ -366,13 +364,13 @@ const TeamDetailsPage = () => {
                                 ? match.away_team_id
                                 : match.home_team_id
                             }
-                            size="w-8 h-8"
+                            size="w-8 h-8 md:w-10 md:h-10"
                           />
                         </div>
 
                         {/* Team Name */}
                         <div className="col-span-7 pr-8">
-                          <div className="text-[9px] font-medium text-gray-900 dark:text-dark-text">
+                          <div className="text-[9px] md:text-base font-medium text-gray-900 dark:text-dark-text">
                             {match.home_team_id === team.id
                               ? match.away_team_name
                               : match.home_team_name}
