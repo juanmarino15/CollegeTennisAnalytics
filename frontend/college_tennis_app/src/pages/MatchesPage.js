@@ -5,6 +5,9 @@ import { useNavigate } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
+const STORAGE_KEY_DATE = "tennis_app_selected_date";
+const STORAGE_KEY_FILTERS = "tennis_app_filters";
+
 // TeamLogo component with responsive sizing
 const TeamLogo = ({ teamId }) => {
   const [hasError, setHasError] = useState(false);
@@ -18,7 +21,7 @@ const TeamLogo = ({ teamId }) => {
   }
 
   return (
-    <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-12 md:h-12 flex items-center justify-center mix-blend-multiply dark:mix-blend-normal">
+    <div className="w-8 h-8 sm:w-14 sm:h-14 md:w-12 md:h-12 flex items-center justify-center mix-blend-multiply dark:mix-blend-normal">
       <img
         src={`http://localhost:8000/api/v1/teams/${teamId}/logo`}
         alt="Team Logo"
@@ -29,21 +32,46 @@ const TeamLogo = ({ teamId }) => {
   );
 };
 
+//get initial state
+const getInitialDate = () => {
+  const storedDate = sessionStorage.getItem(STORAGE_KEY_DATE);
+  return storedDate ? new Date(storedDate) : new Date();
+};
+
+//get initial filters
+const getInitialFilters = () => {
+  const storedFilters = sessionStorage.getItem(STORAGE_KEY_FILTERS);
+  return storedFilters
+    ? JSON.parse(storedFilters)
+    : {
+        gender: "",
+        conference: "",
+        sort: "time-asc",
+      };
+};
+
 const MatchesPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(getInitialDate());
   const [matchScores, setMatchScores] = useState({}); //match scores
   const [availableConferences, setAvailableConferences] = useState(new Set());
   const navigate = useNavigate();
-  const [filters, setFilters] = useState({
-    gender: "",
-    conference: "",
-    sort: "time-asc",
-  });
+  const [filters, setFilters] = useState(getInitialFilters());
+
+  const updateDate = (date) => {
+    setSelectedDate(date);
+    sessionStorage.setItem(STORAGE_KEY_DATE, date.toISOString());
+  };
+
+  const updateFilters = (newValues) => {
+    const updatedFilters = { ...filters, ...newValues };
+    setFilters(updatedFilters);
+    sessionStorage.setItem(STORAGE_KEY_FILTERS, JSON.stringify(updatedFilters));
+  };
 
   // Sort matches by time
   const sortedMatches = useMemo(() => {
@@ -255,7 +283,7 @@ const MatchesPage = () => {
               <Calendar className="w-5 h-5 text-primary-500 flex-shrink-0" />
               <DatePicker
                 selected={selectedDate}
-                onChange={(date) => setSelectedDate(date)}
+                onChange={(date) => updateDate(date)}
                 className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2
                 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
                 dateFormat="yyyy-MM-dd"
@@ -287,12 +315,7 @@ const MatchesPage = () => {
                   </label>
                   <select
                     value={filters.gender}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        gender: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => updateFilters({ gender: e.target.value })}
                     className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="">All</option>
@@ -309,10 +332,7 @@ const MatchesPage = () => {
                   <select
                     value={filters.conference}
                     onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        conference: e.target.value,
-                      }))
+                      updateFilters({ conference: e.target.value })
                     }
                     className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
                   >
@@ -333,9 +353,7 @@ const MatchesPage = () => {
                   </label>
                   <select
                     value={filters.sort}
-                    onChange={(e) =>
-                      setFilters((prev) => ({ ...prev, sort: e.target.value }))
-                    }
+                    onChange={(e) => updateFilters({ sort: e.target.value })}
                     className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="time-asc">Start Time (Earliest)</option>
@@ -457,7 +475,7 @@ const MatchesPage = () => {
                       className="w-10 h-10 sm:w-8 sm:h-8"
                     />
                     <span
-                      className={`font-medium text-xs sm:text-sm text-gray-900 dark:text-dark-text
+                      className={`text-[9px] sm:text-sm text-gray-900 dark:text-dark-text
       ${match.is_conference_match ? "font-semibold" : ""}`}
                     >
                       {getTeamName(match.home_team_id)}
@@ -526,12 +544,9 @@ const MatchesPage = () => {
 
                   {/* Away Team */}
                   <div className="flex flex-col sm:flex-row items-center w-1/3 justify-start text-center sm:flex-row sm:justify-start sm:text-left">
-                    <TeamLogo
-                      teamId={match.away_team_id}
-                      className="w-10 h-10 sm:w-8 sm:h-8"
-                    />
+                    <TeamLogo teamId={match.away_team_id} />
                     <span
-                      className={`font-medium text-xs sm:text-sm text-gray-900 dark:text-dark-text 
+                      className={`text-[9px] sm:text-sm text-gray-900 dark:text-dark-text 
       ${match.is_conference_match ? "font-semibold" : ""}`}
                     >
                       {getTeamName(match.away_team_id)}
