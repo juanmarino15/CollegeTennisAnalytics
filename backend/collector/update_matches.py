@@ -145,7 +145,7 @@ class MatchUpdatesService:
         limit = 100
         total_processed = 0
         match_type = "completed" if is_completed else "upcoming"
-        cutoff_date = (datetime.today() - timedelta(days=30)).date()  # One month before today
+        cutoff_date = (datetime.today() - timedelta(days=15)).date()  # 15 days before today
 
         while True:
             logging.info(f"Fetching {match_type} matches batch (skip={skip}, limit={limit})")
@@ -169,17 +169,17 @@ class MatchUpdatesService:
                     
                     # Get today's date and calculate one month from now
                     today = datetime.now().date()
-                    one_month_future = today + timedelta(days=10)
+                    days_in_future = today + timedelta(days=10)
 
-                    # If we hit matches more than a month in the future, skip to next batch
-                    if match_date > one_month_future:
+                    # If we hit matches more than a 10 days in the future, skip to next batch
+                    if match_date > days_in_future:
                         logging.info(f"Found match on {match_date} (more than a month away). Skipping to next batch.")
                         should_skip_batch = True
                         break  # Break out of the for loop
 
-                    # If we hit a match before January 1st, stop processing completely
+                    # If we hit a match before the last 10 days, stop processing completely
                     if match_date < cutoff_date:
-                        logging.info(f"Reached match before January 1st (date: {match_date}). Stopping processing.")
+                        logging.info(f"Reached match before last 10 days (date: {match_date}). Stopping processing.")
                         return total_processed
 
                     match_id = match_data.get('id')

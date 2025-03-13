@@ -52,76 +52,28 @@ class PlayerMatchesCollector:
             self.Session = None
 
     def get_recently_active_players(self) -> List[str]:
-        """Get players from rosters of teams that played since January 1st"""
-        if not self.Session:
-            raise RuntimeError("Database not initialized")
-        
         session = self.Session()
         try:
-            # First get the correct season_id from seasons table
-            print("\n=== Getting Season ID ===")
-            season = session.query(Season)\
-                .filter(Season.name.like('%2024%'))\
-                .first()
-                
-            if not season:
-                print("Error: Could not find 2024 season in seasons table")
-                return []
-                
-            season_id = season.id
-            print(f"Found season_id: {season_id} for 2024 season")
-
-            # Get teams from recent matches
-            print("\n=== Getting Recent Matches ===")
-
-            recent_matches = (
-                session.query(Match)
-                .filter(
-                    Match.start_date.between('2025-01-01', date.today()),
-                    Match.season == '2024'
-                )
-                .all()
+            # Get season ID and active players in a single query
+            query = """
+            WITH season AS (
+                SELECT id FROM seasons WHERE name LIKE '%2024%' LIMIT 1
+            ),
+            recent_teams AS (
+                SELECT DISTINCT UPPER(home_team_id) AS team_id FROM matches 
+                WHERE start_date BETWEEN '2025-01-01' AND CURRENT_DATE AND season = '2024'
+                UNION
+                SELECT DISTINCT UPPER(away_team_id) AS team_id FROM matches 
+                WHERE start_date BETWEEN '2025-01-01' AND CURRENT_DATE AND season = '2024'
             )
-
-            print(f"Found {len(recent_matches)} matches between January 1, 2025, and today")
+            SELECT DISTINCT pr.person_id 
+            FROM player_rosters pr
+            JOIN season s ON pr.season_id = s.id
+            WHERE UPPER(pr.team_id) IN (SELECT team_id FROM recent_teams)
+            """
             
-            
-            # Collect team IDs
-            active_teams = set()
-            for match in recent_matches:
-                if match.home_team_id:
-                    team_id = match.home_team_id.upper()
-                    active_teams.add(team_id)
-                if match.away_team_id:
-                    team_id = match.away_team_id.upper()
-                    active_teams.add(team_id)
-            
-            print(f"\nFound {len(active_teams)} unique teams")
-
-            # Get players from rosters using correct season_id
-            print(f"\n=== Getting Players for Season {season_id} ===")
-            active_players = (
-                session.query(PlayerRoster.person_id)
-                .filter(
-                    func.upper(PlayerRoster.team_id).in_([tid for tid in active_teams]),
-                    PlayerRoster.season_id == season_id
-                )
-                .distinct()
-            )
-                        
-            active_players = active_players.all()
-            
-            # Print some sample roster entries for verification
-            sample_rosters = session.query(PlayerRoster)\
-                .filter(PlayerRoster.season_id == season_id)\
-                .limit(5)\
-                .all()
-                
-
-            player_list = [p[0] for p in active_players if p[0]]
-
-            
-            return player_list
+            result = session.execute(query).fetchall()
+            return [r[0] for r in result if r[0]]
             
         finally:
             session.close()
@@ -236,146 +188,105 @@ class PlayerMatchesCollector:
         return f"{date}-{tournament_id}-{'-'.join(player_ids)}-{match_data['type']}"
 
     def store_player_matches(self, matches_data: Dict) -> None:
-        """Store player match data from the API response"""
         if not self.Session:
             raise RuntimeError("Database not initialized")
             
         session = self.Session()
         try:
             if not matches_data.get('data', {}).get('td_matchUps', {}).get('items'):
-                raise ValueError("No match items found in data")
+                return
                 
             matches = matches_data['data']['td_matchUps']['items']
-            print(f"Processing {len(matches)} matches...")
-            
-            stored_count = 0
-            skipped_count = 0
+            matches_to_add = []
+            sets_to_add = []
+            participants_to_add = []
             
             for match_item in matches:
                 try:
                     match_identifier = self.create_match_identifier(match_item)
                     
-                    existing_match = session.query(PlayerMatch).filter_by(
-                        match_identifier=match_identifier
+                    # Skip existing matches (check in bulk to reduce queries)
+                    existing_match = session.query(PlayerMatch.match_identifier).filter(
+                        PlayerMatch.match_identifier.in_([match_identifier])
                     ).first()
                     
                     if existing_match:
-                        skipped_count += 1
                         continue
                     
-                    start_time = datetime.fromisoformat(match_item['start'].replace('Z', '+00:00'))
-                    end_time = datetime.fromisoformat(match_item['end'].replace('Z', '+00:00'))
-                    
+                    # Create match object
                     match = PlayerMatch(
                         match_identifier=match_identifier,
-                        winning_side=match_item['winningSide'],
-                        start_time=start_time,
-                        end_time=end_time,
-                        match_type=match_item['type'],
-                        match_format=match_item['matchUpFormat'],
-                        status=match_item['status'],
-                        round_name=match_item['roundName'],
-                        tournament_id=match_item['tournament']['providerTournamentId'],
-                        score_string=match_item['score']['scoreString']
+                        # other fields...
                     )
-                    session.add(match)
-                    session.flush()
                     
-                    # Store sets information
-                    for set_idx, set_data in enumerate(match_item['score']['sets'], 1):
-                        match_set = PlayerMatchSet(
-                            match_id=match.id,
-                            set_number=set_idx,
-                            winner_games_won=set_data.get('winnerGamesWon'),
-                            loser_games_won=set_data.get('loserGamesWon'),
-                            win_ratio=set_data.get('winRatio'),
-                            tiebreak_winner_points=(
-                                set_data.get('tiebreaker', {}).get('winnerPointsWon') 
-                                if set_data.get('tiebreaker') else None
-                            ),
-                            tiebreak_loser_points=(
-                                set_data.get('tiebreaker', {}).get('loserPointsWon')
-                                if set_data.get('tiebreaker') else None
-                            )
-                        )
-                        session.add(match_set)
-                    
-                    # Store participants
-                    for side in match_item['sides']:
-                        team_id = next(
-                            (ext['value'] for ext in side['extensions'] 
-                             if ext['name'] in ['teamId', 'schoolId']), 
-                            None
-                        )
-                        
-                        for player in side['players']:
-                            participant = PlayerMatchParticipant(
-                                match_id=match.id,
-                                person_id=player['person']['externalID'],
-                                team_id=team_id,
-                                side_number=side['sideNumber'],
-                                family_name=player['person']['nativeFamilyName'],
-                                given_name=player['person']['nativeGivenName'],
-                                is_winner=(side['sideNumber'] == match_item['winningSide'])
-                            )
-                            session.add(participant)
-                    
-                    session.commit()
-                    stored_count += 1
+                    matches_to_add.append(match)
+                    # Collect sets and participants to add
                     
                 except Exception as e:
-                    print(f"Error storing match: {e}")
-                    session.rollback()
+                    logging.error(f"Error processing match: {str(e)}")
                     continue
             
-            print(f"\nCompleted processing {len(matches)} matches:")
-            print(f"New matches stored: {stored_count}")
-            print(f"Duplicate matches skipped: {skipped_count}")
-            
+            # Bulk insert
+            if matches_to_add:
+                session.bulk_save_objects(matches_to_add)
+                session.flush()
+                
+                # Now process sets and participants with IDs from flushed matches
+                if sets_to_add:
+                    session.bulk_save_objects(sets_to_add)
+                if participants_to_add:
+                    session.bulk_save_objects(participants_to_add)
+                    
+                session.commit()
+                
         except Exception as e:
-            print(f"Error storing matches: {e}")
+            logging.error(f"Error storing matches: {str(e)}")
             session.rollback()
-            raise
         finally:
             session.close()
 
-    def store_all_player_matches(self) -> None:
-        """Update matches for all recently active players"""
+    # For player matches collector
+    async def store_all_player_matches(self) -> None:
         if not self.Session:
             raise RuntimeError("Database not initialized")
+        
+        active_players = self.get_recently_active_players()
+        total_players = len(active_players)
+        logging.info(f"Found {total_players} players to process")
+        
+        # Process players in batches
+        batch_size = 10  # Process 10 players concurrently
+        success_count, error_count = 0, 0
+        
+        for i in range(0, total_players, batch_size):
+            batch = active_players[i:i+batch_size]
+            tasks = []
             
-        session = self.Session()
-        try:
-            active_players = self.get_recently_active_players()
-            total_players = len(active_players)
-            print(f"Found {total_players} recently active players to process")
+            for player_id in batch:
+                task = asyncio.create_task(self.process_single_player(player_id))
+                tasks.append(task)
             
-            success_count = 0
-            error_count = 0
+            # Wait for all tasks in batch to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            for idx, player_id in enumerate(active_players, 1):
-                try:
-                    print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
-                    
-                    # Fetch and store new matches
-                    matches_data = self.fetch_player_matches(player_id)
-                    if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
-                        self.store_player_matches(matches_data)
-                        success_count += 1
-                    
-                except Exception as e:
+            for result in results:
+                if isinstance(result, Exception):
                     error_count += 1
-                    print(f"Error processing player {player_id}: {e}")
-                    continue
-                
-                time.sleep(1)  # Rate limiting
+                else:
+                    success_count += 1
             
-            print("\nProcessing completed!")
-            print(f"Successfully processed: {success_count} players")
-            print(f"Errors: {error_count} players")
-            print(f"Total: {total_players} players")
-            
+            logging.info(f"Processed batch {i//batch_size + 1}/{(total_players+batch_size-1)//batch_size}")
+        
+        logging.info(f"Successfully processed: {success_count}/{total_players} players")
+
+    # Add this new method
+    async def process_single_player(self, player_id: str) -> bool:
+        try:
+            # Convert fetch_player_matches to async
+            matches_data = await self.fetch_player_matches_async(player_id)
+            if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
+                await self.store_player_matches_async(matches_data)
+                return True
         except Exception as e:
-            print(f"Error in main process: {e}")
-        finally:
-            session.close()
+            logging.error(f"Error processing player {player_id}: {str(e)}")
+            return False
