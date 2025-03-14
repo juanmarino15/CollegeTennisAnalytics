@@ -73,9 +73,42 @@ const MatchesPage = () => {
     sessionStorage.setItem(STORAGE_KEY_FILTERS, JSON.stringify(updatedFilters));
   };
 
-  // Sort matches by time
-  const sortedMatches = useMemo(() => {
-    return [...matches].sort((a, b) => {
+  // Sort matches by time, with no-score matches at the bottom
+  const sortedMatchesData = useMemo(() => {
+    // Group matches by whether they have scores or not
+    const matchesWithScores = [];
+    const matchesWithoutScores = [];
+    const upcomingMatches = [];
+
+    // Current date for determining if match has already happened
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Reset to beginning of today
+
+    matches.forEach((match) => {
+      // Parse match date
+      const matchDate = new Date(match.start_date);
+      matchDate.setHours(0, 0, 0, 0); // Reset to beginning of day
+
+      // Check if match is in the past or today
+      const matchInPastOrToday = matchDate <= now;
+
+      // Check if match has scores (completed and in scores dict)
+      const hasScore = match.completed && matchScores[match.id];
+
+      if (!matchInPastOrToday) {
+        // Future matches go in upcoming group
+        upcomingMatches.push(match);
+      } else if (hasScore) {
+        // Past matches with scores
+        matchesWithScores.push(match);
+      } else {
+        // Past matches without scores
+        matchesWithoutScores.push(match);
+      }
+    });
+
+    // Sort each group according to the selected sort option
+    const sortFn = (a, b) => {
       // First handle TBD matches - push them to the end
       const aIsTBD =
         !a.scheduled_time ||
@@ -109,8 +142,24 @@ const MatchesPage = () => {
         default:
           return timeA - timeB;
       }
-    });
-  }, [matches, filters.sort]);
+    };
+
+    matchesWithScores.sort(sortFn);
+    matchesWithoutScores.sort(sortFn);
+    upcomingMatches.sort(sortFn);
+
+    // Return object with all groups and flags indicating if we need delimiters
+    return {
+      withScores: matchesWithScores,
+      withoutScores: matchesWithoutScores,
+      upcoming: upcomingMatches,
+      needsPastScoresDelimiter:
+        matchesWithScores.length > 0 && matchesWithoutScores.length > 0,
+      needsUpcomingDelimiter:
+        (matchesWithScores.length > 0 || matchesWithoutScores.length > 0) &&
+        upcomingMatches.length > 0,
+    };
+  }, [matches, matchScores, filters.sort]);
 
   // Helper function to format conference name
   const formatConferenceName = (conference) => {
@@ -135,7 +184,7 @@ const MatchesPage = () => {
   // Fetch team data
   const fetchTeams = async (matchesData) => {
     const teamIds = new Set();
-    const conferences = new Set(); // Add this
+    const conferences = new Set();
 
     matchesData.forEach((match) => {
       teamIds.add(match.home_team_id);
@@ -149,7 +198,6 @@ const MatchesPage = () => {
           const team = await api.teams.getById(teamId);
           teamsMap[teamId] = team;
           if (team.conference) {
-            // Add this
             conferences.add(team.conference);
           }
         } catch (error) {
@@ -158,7 +206,7 @@ const MatchesPage = () => {
       })
     );
 
-    setAvailableConferences(conferences); // Add this
+    setAvailableConferences(conferences);
     setTeams(teamsMap);
   };
 
@@ -272,6 +320,133 @@ const MatchesPage = () => {
     return team.name;
   };
 
+  // Match card component to avoid repetition
+  const MatchCard = ({ match }) => {
+    const hasScore = match.completed && matchScores[match.id];
+
+    return (
+      <div
+        onClick={() => navigate(`/matches/${match.id}`)}
+        className={`relative bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg
+                  hover:shadow-xl transition-shadow cursor-pointer
+                  ${
+                    match.is_conference_match
+                      ? "border-l-4 border-primary-500 dark:border-primary-400"
+                      : ""
+                  }`}
+      >
+        <div className="flex flex-col">
+          {/* Teams and Time Row */}
+          <div className="flex justify-center items-center gap-4 sm:gap-8">
+            {/* Home Team */}
+            <div className="flex flex-col sm:flex-row items-center w-1/3 justify-end text-center sm:flex-row-reverse sm:justify-start sm:text-left">
+              <TeamLogo
+                teamId={match.home_team_id}
+                className="w-10 h-10 sm:w-8 sm:h-8"
+              />
+              <span
+                className={`text-[9px] sm:text-sm text-gray-900 dark:text-dark-text
+    ${match.is_conference_match ? "font-semibold" : ""}`}
+              >
+                {getTeamName(match.home_team_id)}
+              </span>
+            </div>
+
+            {/* Time/Score Section */}
+            <div className="flex flex-col items-center w-1/3">
+              {hasScore ? (
+                <span className="text-sm sm:text-base font-medium text-gray-900 dark:text-dark-text">
+                  {`${matchScores[match.id].home_team_score} - ${
+                    matchScores[match.id].away_team_score
+                  }`}
+                </span>
+              ) : match.completed ? (
+                <span className="text-sm sm:text-base font-medium text-yellow-600 dark:text-yellow-400">
+                  No Score
+                </span>
+              ) : (
+                <>
+                  <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-dark-text">
+                    {(() => {
+                      try {
+                        if (!match.scheduled_time) return "TBD";
+                        const date = new Date(match.scheduled_time + "Z");
+                        if (isNaN(date.getTime())) return "TBD";
+                        return new Date(
+                          match.scheduled_time + "Z"
+                        ).toLocaleTimeString("en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                          timeZone: match.timezone,
+                        });
+                      } catch (e) {
+                        return "TBD";
+                      }
+                    })()}
+                  </span>
+                  <span className="text-xs sm:text-xs text-gray-500 dark:text-gray-400">
+                    {(() => {
+                      try {
+                        if (!match.scheduled_time) return "";
+                        const date = new Date(match.scheduled_time + "Z");
+                        if (isNaN(date.getTime())) return "";
+                        return formatMatchTime(
+                          match.scheduled_time,
+                          match.timezone
+                        )
+                          .split(" ")
+                          .pop();
+                      } catch (e) {
+                        return "";
+                      }
+                    })()}
+                  </span>
+                </>
+              )}
+              {hasScore && (
+                <span
+                  className="text-[12px] leading-none px-1.5 py-0.5 mt-1 rounded-full inline-flex items-center
+                  bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                >
+                  Final
+                </span>
+              )}
+              {match.completed && !hasScore && (
+                <span
+                  className="text-[12px] leading-none px-1.5 py-0.5 mt-1 rounded-full inline-flex items-center
+                  bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400"
+                >
+                  Pending
+                </span>
+              )}
+            </div>
+
+            {/* Away Team */}
+            <div className="flex flex-col sm:flex-row items-center w-1/3 justify-start text-center sm:flex-row sm:justify-start sm:text-left">
+              <TeamLogo teamId={match.away_team_id} />
+              <span
+                className={`text-[9px] sm:text-sm text-gray-900 dark:text-dark-text 
+    ${match.is_conference_match ? "font-semibold" : ""}`}
+              >
+                {getTeamName(match.away_team_id)}
+              </span>
+            </div>
+          </div>
+
+          {/* Conference Match Tag */}
+          {match.is_conference_match && (
+            <div className="absolute top-1.5 left-1/2 -translate-x-1/2 sm:left-auto sm:right-2 sm:translate-x-0">
+              <span className="text-[10px] leading-none bg-primary-100/80 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded-full inline-flex items-center">
+                Conference
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="py-4 space-y-4">
       {/* Date and Filters Section */}
@@ -285,7 +460,7 @@ const MatchesPage = () => {
               selected={selectedDate}
               onChange={(date) => updateDate(date)}
               className="w-full bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2
-        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500 text-xs"
+                text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500 text-xs"
               dateFormat="yyyy-MM-dd"
               placeholderText="Select a date"
             />
@@ -374,7 +549,7 @@ const MatchesPage = () => {
               selected={selectedDate}
               onChange={(date) => updateDate(date)}
               className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2
-        text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500 text-sm"
+                text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500 text-sm"
               dateFormat="yyyy-MM-dd"
               placeholderText="Select a date"
             />
@@ -392,7 +567,7 @@ const MatchesPage = () => {
               value={filters.gender}
               onChange={(e) => updateFilters({ gender: e.target.value })}
               className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 
-        text-sm text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                text-sm text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All</option>
               <option value="MALE">Men</option>
@@ -409,7 +584,7 @@ const MatchesPage = () => {
               value={filters.conference}
               onChange={(e) => updateFilters({ conference: e.target.value })}
               className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 
-        text-sm text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                text-sm text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All Matches</option>
               {[...availableConferences].sort().map((conf) => (
@@ -430,7 +605,7 @@ const MatchesPage = () => {
               value={filters.sort}
               onChange={(e) => updateFilters({ sort: e.target.value })}
               className="bg-transparent border border-gray-200 dark:border-dark-border rounded px-3 py-2 
-        text-sm text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
+                text-sm text-gray-900 dark:text-dark-text focus:ring-2 focus:ring-primary-500"
             >
               <option value="time-asc">Start Time (Earliest)</option>
               <option value="time-desc">Start Time (Latest)</option>
@@ -440,6 +615,7 @@ const MatchesPage = () => {
           </div>
         </div>
       </div>
+
       {/* Matches List */}
       <div className="space-y-4">
         {loading ? (
@@ -456,125 +632,58 @@ const MatchesPage = () => {
           <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-lg">
             {error}
           </div>
-        ) : sortedMatches.length === 0 ? (
+        ) : sortedMatchesData.withScores.length === 0 &&
+          sortedMatchesData.withoutScores.length === 0 ? (
           <div className="bg-white dark:bg-dark-card rounded-lg p-8 text-center text-gray-500 dark:text-dark-text-dim">
             No matches scheduled for this date
           </div>
         ) : (
-          sortedMatches.map((match) => (
-            <div
-              key={match.id}
-              onClick={() => navigate(`/matches/${match.id}`)}
-              className={`relative bg-white dark:bg-dark-card rounded-lg p-4 shadow-lg
-                    hover:shadow-xl transition-shadow cursor-pointer
-                    ${
-                      match.is_conference_match
-                        ? "border-l-4 border-primary-500 dark:border-primary-400"
-                        : ""
-                    }`}
-            >
-              <div className="flex flex-col">
-                {/* Teams and Time Row */}
-                <div className="flex justify-center items-center gap-4 sm:gap-8">
-                  {/* Home Team */}
-                  <div className="flex flex-col sm:flex-row items-center w-1/3 justify-end text-center sm:flex-row-reverse sm:justify-start sm:text-left">
-                    <TeamLogo
-                      teamId={match.home_team_id}
-                      className="w-10 h-10 sm:w-8 sm:h-8"
-                    />
-                    <span
-                      className={`text-[9px] sm:text-sm text-gray-900 dark:text-dark-text
-      ${match.is_conference_match ? "font-semibold" : ""}`}
-                    >
-                      {getTeamName(match.home_team_id)}
-                    </span>
-                  </div>
+          <>
+            {/* Matches with scores */}
+            {sortedMatchesData.withScores.map((match) => (
+              <MatchCard key={match.id} match={match} />
+            ))}
 
-                  {/* Time/Score Section */}
-                  <div className="flex flex-col items-center w-1/3">
-                    {match.completed ? (
-                      <span className="text-sm sm:text-base font-medium text-gray-900 dark:text-dark-text">
-                        {matchScores[match.id]
-                          ? `${matchScores[match.id].home_team_score} - ${
-                              matchScores[match.id].away_team_score
-                            }`
-                          : "vs"}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-dark-text">
-                          {(() => {
-                            try {
-                              if (!match.scheduled_time) return "TBD";
-                              const date = new Date(match.scheduled_time + "Z");
-                              if (isNaN(date.getTime())) return "TBD";
-                              return new Date(
-                                match.scheduled_time + "Z"
-                              ).toLocaleTimeString("en-US", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                                timeZone: match.timezone,
-                              });
-                            } catch (e) {
-                              return "TBD";
-                            }
-                          })()}
-                        </span>
-                        <span className="text-xs sm:text-xs text-gray-500 dark:text-gray-400">
-                          {(() => {
-                            try {
-                              if (!match.scheduled_time) return "";
-                              const date = new Date(match.scheduled_time + "Z");
-                              if (isNaN(date.getTime())) return "";
-                              return formatMatchTime(
-                                match.scheduled_time,
-                                match.timezone
-                              )
-                                .split(" ")
-                                .pop();
-                            } catch (e) {
-                              return "";
-                            }
-                          })()}
-                        </span>
-                      </>
-                    )}
-                    {match.completed && (
-                      <span
-                        className="text-[12px] leading-none px-1.5 py-0.5 mt-1 rounded-full inline-flex items-center
-        bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
-                      >
-                        Final
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Away Team */}
-                  <div className="flex flex-col sm:flex-row items-center w-1/3 justify-start text-center sm:flex-row sm:justify-start sm:text-left">
-                    <TeamLogo teamId={match.away_team_id} />
-                    <span
-                      className={`text-[9px] sm:text-sm text-gray-900 dark:text-dark-text 
-      ${match.is_conference_match ? "font-semibold" : ""}`}
-                    >
-                      {getTeamName(match.away_team_id)}
-                    </span>
-                  </div>
+            {/* Delimiter for past matches without scores */}
+            {sortedMatchesData.needsPastScoresDelimiter && (
+              <div className="relative py-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
                 </div>
-
-                {/* Conference Match Tag */}
-                {match.is_conference_match && (
-                  <div className="absolute top-1.5 left-1/2 -translate-x-1/2 sm:left-auto sm:right-2 sm:translate-x-0">
-                    <span className="text-[10px] leading-none bg-primary-100/80 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded-full inline-flex items-center">
-                      Conference
-                    </span>
-                  </div>
-                )}
+                <div className="relative flex justify-center">
+                  <span className="px-4 py-1 bg-gray-200 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400 rounded-full">
+                    Matches Without Reported Scores
+                  </span>
+                </div>
               </div>
-            </div>
-          ))
+            )}
+
+            {/* Past matches without scores */}
+            {sortedMatchesData.withoutScores.map((match) => (
+              <MatchCard key={match.id} match={match} />
+            ))}
+
+            {/* Delimiter for upcoming matches */}
+            {sortedMatchesData.needsUpcomingDelimiter && (
+              <div className="relative py-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="px-4 py-1 bg-gray-100 dark:bg-gray-900 text-xs font-medium text-gray-600 dark:text-gray-400 rounded-full">
+                    Upcoming Matches
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Upcoming matches */}
+            {sortedMatchesData.upcoming.map((match) => (
+              <MatchCard key={match.id} match={match} />
+            ))}
+          </>
         )}
-      </div>{" "}
+      </div>
     </div>
   );
 };
