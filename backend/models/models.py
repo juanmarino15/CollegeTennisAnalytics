@@ -190,6 +190,7 @@ class PlayerMatch(Base):
     round_name = Column(String)  # e.g., "R256", "R128"
     tournament_id = Column(String)  # providerTournamentId
     score_string = Column(String)  # e.g., "6-1 6-0"
+    collection_position = Column(Integer, nullable=True)  # Add this new field
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

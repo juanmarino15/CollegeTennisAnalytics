@@ -47,7 +47,9 @@ class PlayerService:
             "match_type": match.match_type,
             "match_format": match.match_format,
             "status": match.status,
-            "score_string": match.score_string
+            "score_string": match.score_string,
+            "collection_position": match.collection_position  
+
         }
 
     def get_players(self, team_id: str = None):
@@ -266,6 +268,7 @@ class PlayerService:
         
         # Get WTN ratings
         wtn_data = self.get_player_wtn(player_id)
+        print(wtn_data)
         singles_wtn = None
         doubles_wtn = None
         
@@ -487,6 +490,7 @@ class PlayerService:
             if partner:
                 partner_name = f"{partner.given_name} {partner.family_name}"
             
+            print(vars(match))  # Shows all attributes as a dictionary
             # Get position from lineup
             position = 0
             if match.match_identifier in all_lineups:
@@ -501,7 +505,7 @@ class PlayerService:
                 "opponent_team_id": opponent_team_id,
                 "is_home": participant.side_number == "SIDE1",  # Assuming SIDE1 is home
                 "match_type": match.match_type,
-                "position": position,
+                "position": match.collection_position if match.collection_position is not None else position,
                 "score": match.score_string,
                 "won": participant.is_winner,
                 "partner_name": partner_name,
