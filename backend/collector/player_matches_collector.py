@@ -298,38 +298,46 @@ class PlayerMatchesCollector:
             session.close()
 
     # For player matches collector
-    async def store_all_player_matches(self) -> None:
+    def store_all_player_matches(self) -> None:
+        """Update matches for all recently active players"""
         if not self.Session:
             raise RuntimeError("Database not initialized")
-        
-        active_players = self.get_recently_active_players()
-        total_players = len(active_players)
-        logging.info(f"Found {total_players} players to process")
-        
-        # Process players in batches
-        batch_size = 10  # Process 10 players concurrently
-        success_count, error_count = 0, 0
-        
-        for i in range(0, total_players, batch_size):
-            batch = active_players[i:i+batch_size]
-            tasks = []
+                
+        session = self.Session()
+        try:
+            active_players = self.get_recently_active_players()
+            total_players = len(active_players)
+            print(f"Found {total_players} recently active players to process")
             
-            for player_id in batch:
-                task = asyncio.create_task(self.process_single_player(player_id))
-                tasks.append(task)
+            success_count = 0
+            error_count = 0
             
-            # Wait for all tasks in batch to complete
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            for result in results:
-                if isinstance(result, Exception):
+            for idx, player_id in enumerate(active_players, 1):
+                try:
+                    print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
+                    
+                    # Fetch and store new matches
+                    matches_data = self.fetch_player_matches(player_id)
+                    if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
+                        self.store_player_matches(matches_data)
+                        success_count += 1
+                    
+                except Exception as e:
                     error_count += 1
-                else:
-                    success_count += 1
+                    print(f"Error processing player {player_id}: {e}")
+                    continue
+                
+                time.sleep(1)  # Rate limiting
             
-            logging.info(f"Processed batch {i//batch_size + 1}/{(total_players+batch_size-1)//batch_size}")
-        
-        logging.info(f"Successfully processed: {success_count}/{total_players} players")
+            print("\nProcessing completed!")
+            print(f"Successfully processed: {success_count} players")
+            print(f"Errors: {error_count} players")
+            print(f"Total: {total_players} players")
+            
+        except Exception as e:
+            print(f"Error in main process: {e}")
+        finally:
+            session.close()
 
     
     async def process_single_player(self, player_id: str) -> bool:
