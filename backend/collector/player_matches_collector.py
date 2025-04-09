@@ -187,61 +187,113 @@ class PlayerMatchesCollector:
         
         return f"{date}-{tournament_id}-{'-'.join(player_ids)}-{match_data['type']}"
 
-    def store_player_matches(self, matches_data: Dict) -> None:
+    def store_player_matches(self, matches_data):
+        """Store player match data from the API response"""
         if not self.Session:
             raise RuntimeError("Database not initialized")
             
         session = self.Session()
         try:
             if not matches_data.get('data', {}).get('td_matchUps', {}).get('items'):
-                return
+                raise ValueError("No match items found in data")
                 
             matches = matches_data['data']['td_matchUps']['items']
-            matches_to_add = []
-            sets_to_add = []
-            participants_to_add = []
+            print(f"Processing {len(matches)} matches...")
+            
+            stored_count = 0
+            skipped_count = 0
             
             for match_item in matches:
                 try:
+                    # Create unique identifier for this match
                     match_identifier = self.create_match_identifier(match_item)
                     
-                    # Skip existing matches (check in bulk to reduce queries)
-                    existing_match = session.query(PlayerMatch.match_identifier).filter(
-                        PlayerMatch.match_identifier.in_([match_identifier])
-                    ).first()
+                    # Check if match already exists using the identifier
+                    existing_match = session.query(PlayerMatch).filter_by(match_identifier=match_identifier).first()
                     
                     if existing_match:
+                        # print(f"Skipping duplicate match: {match_identifier}")
+                        skipped_count += 1
                         continue
                     
-                    # Create match object
-                    match = PlayerMatch(
-                        match_identifier=match_identifier,
-                        # other fields...
-                    )
+                    # If we get here, this is a new match
+                    start_time = datetime.fromisoformat(match_item['start'].replace('Z', '+00:00'))
+                    end_time = datetime.fromisoformat(match_item['end'].replace('Z', '+00:00'))
                     
-                    matches_to_add.append(match)
-                    # Collect sets and participants to add
+                    match = PlayerMatch(
+                        match_identifier=match_identifier,  # Store the identifier
+                        winning_side=match_item['winningSide'],
+                        start_time=start_time,
+                        end_time=end_time,
+                        match_type=match_item['type'],
+                        match_format=match_item['matchUpFormat'],
+                        status=match_item['status'],
+                        round_name=match_item['roundName'],
+                        tournament_id=match_item['tournament']['providerTournamentId'],
+                        score_string=match_item['score']['scoreString'],
+                        collection_position=match_item.get('collectionPosition')
+
+                    )
+                    session.add(match)
+                    session.flush()
+                    
+                    # Store sets information
+                    for set_idx, set_data in enumerate(match_item['score']['sets'], 1):
+                        match_set = PlayerMatchSet(
+                            match_id=match.id,
+                            set_number=set_idx,
+                            winner_games_won=set_data.get('winnerGamesWon'),
+                            loser_games_won=set_data.get('loserGamesWon'),
+                            win_ratio=set_data.get('winRatio'),
+                            tiebreak_winner_points=(
+                                set_data.get('tiebreaker', {}).get('winnerPointsWon') 
+                                if set_data.get('tiebreaker') else None
+                            ),
+                            tiebreak_loser_points=(
+                                set_data.get('tiebreaker', {}).get('loserPointsWon')
+                                if set_data.get('tiebreaker') else None
+                            )
+                        )
+                        session.add(match_set)
+                    
+                    # Store participants
+                    for side in match_item['sides']:
+                        # Get team ID from extensions
+                        team_id = None
+                        for ext in side['extensions']:
+                            if ext['name'] in ['teamId', 'schoolId']:
+                                team_id = ext['value']
+                                break
+                        
+                        for player in side['players']:
+                            participant = PlayerMatchParticipant(
+                                match_id=match.id,
+                                person_id=player['person']['externalID'],
+                                team_id=team_id,
+                                side_number=side['sideNumber'],
+                                family_name=player['person']['nativeFamilyName'],
+                                given_name=player['person']['nativeGivenName'],
+                                is_winner=(side['sideNumber'] == match_item['winningSide'])
+                            )
+                            session.add(participant)
+                    
+                    session.commit()
+                    stored_count += 1
+                    # print(f"Successfully stored new match: {match_identifier}")
                     
                 except Exception as e:
-                    logging.error(f"Error processing match: {str(e)}")
+                    print(f"Error storing match: {e}")
+                    session.rollback()
                     continue
             
-            # Bulk insert
-            if matches_to_add:
-                session.bulk_save_objects(matches_to_add)
-                session.flush()
-                
-                # Now process sets and participants with IDs from flushed matches
-                if sets_to_add:
-                    session.bulk_save_objects(sets_to_add)
-                if participants_to_add:
-                    session.bulk_save_objects(participants_to_add)
-                    
-                session.commit()
-                
+            print(f"\nCompleted processing {len(matches)} matches:")
+            print(f"New matches stored: {stored_count}")
+            print(f"Duplicate matches skipped: {skipped_count}")
+            
         except Exception as e:
-            logging.error(f"Error storing matches: {str(e)}")
+            print(f"Error storing matches: {e}")
             session.rollback()
+            raise
         finally:
             session.close()
 
@@ -279,7 +331,7 @@ class PlayerMatchesCollector:
         
         logging.info(f"Successfully processed: {success_count}/{total_players} players")
 
-    # Add this new method
+    
     async def process_single_player(self, player_id: str) -> bool:
         try:
             # Convert fetch_player_matches to async

@@ -1095,7 +1095,9 @@ class TennisDataCollector:
                         status=match_item['status'],
                         round_name=match_item['roundName'],
                         tournament_id=match_item['tournament']['providerTournamentId'],
-                        score_string=match_item['score']['scoreString']
+                        score_string=match_item['score']['scoreString'],
+                        collection_position=match_item.get('collectionPosition')
+
                     )
                     session.add(match)
                     session.flush()

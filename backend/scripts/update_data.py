@@ -15,7 +15,6 @@ sys.path.append(str(parent_dir))
 
 from collector.update_matches import MatchUpdatesService
 from collector.player_matches_collector import PlayerMatchesCollector
-from collector.data_collector import TennisDataCollector
 
 # Configure logging
 logging.basicConfig(
