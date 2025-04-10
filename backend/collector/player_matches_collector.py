@@ -1,16 +1,14 @@
-# collector/player_matches_collector.py
-
-import requests
-import time
-import sys
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import List, Set, Dict, Optional
-from sqlalchemy import create_engine, and_, extract, func
+from sqlalchemy import create_engine, and_, extract, func, text
 from sqlalchemy.orm import sessionmaker
-import logging
-from datetime import date
 from sqlalchemy import between
+from pathlib import Path
+import sys
+import time
+import requests
+from datetime import datetime, date
+from typing import List, Dict
+import logging
+from datetime import datetime, timedelta
 
 
 # Add the parent directory to the Python path
@@ -52,34 +50,111 @@ class PlayerMatchesCollector:
             self.Session = None
 
     def get_recently_active_players(self) -> List[str]:
+        """Get players from rosters of teams that played since January 1st using text() for SQL"""
+        if not self.Session:
+            raise RuntimeError("Database not initialized")
+        
         session = self.Session()
         try:
-            # Get season ID and active players in a single query
-            query = """
+            # Use text() function for the raw SQL query
+            sql_query = text("""
             WITH season AS (
-                SELECT id FROM seasons WHERE name LIKE '%2024%' LIMIT 1
+            SELECT id FROM seasons WHERE name LIKE '%2024%' LIMIT 1
             ),
             recent_teams AS (
                 SELECT DISTINCT UPPER(home_team_id) AS team_id FROM matches 
-                WHERE start_date BETWEEN '2025-01-01' AND CURRENT_DATE AND season = '2024'
+                WHERE start_date BETWEEN CURRENT_DATE - INTERVAL '7 days' AND CURRENT_DATE AND season = '2024'
                 UNION
                 SELECT DISTINCT UPPER(away_team_id) AS team_id FROM matches 
-                WHERE start_date BETWEEN '2025-01-01' AND CURRENT_DATE AND season = '2024'
+                WHERE start_date BETWEEN CURRENT_DATE - INTERVAL '7 days' AND CURRENT_DATE AND season = '2024'
             )
             SELECT DISTINCT pr.person_id 
             FROM player_rosters pr
             JOIN season s ON pr.season_id = s.id
             WHERE UPPER(pr.team_id) IN (SELECT team_id FROM recent_teams)
-            """
+            """)
             
-            result = session.execute(query).fetchall()
-            return [r[0] for r in result if r[0]]
+            print("Executing SQL query to get recently active players")
+            result = session.execute(sql_query).fetchall()
+            player_list = [r[0] for r in result if r[0]]
+            print(f"Found {len(player_list)} active players")
+            
+            return player_list
+            
+        except Exception as e:
+            print(f"Error fetching active players: {e}")
+            return []
+        finally:
+            session.close()
+            
+    def get_recently_active_players_orm(self) -> List[str]:
+        """Alternative implementation using SQLAlchemy ORM instead of raw SQL"""
+        if not self.Session:
+            raise RuntimeError("Database not initialized")
+        
+        session = self.Session()
+        try:
+            # First get the correct season_id from seasons table
+            print("\n=== Getting Season ID ===")
+            season = session.query(Season)\
+                .filter(Season.name.like('%2024%'))\
+                .first()
+                
+            if not season:
+                print("Error: Could not find 2024 season in seasons table")
+                return []
+                
+            season_id = season.id
+            print(f"Found season_id: {season_id} for 2024 season")
+
+            # Get teams from recent matches
+            print("\n=== Getting Recent Matches ===")
+           # Calculate date from 7 days ago
+            seven_days_ago = date.today() - timedelta(days=3)
+
+            recent_matches = (
+                session.query(Match)
+                .filter(
+                    Match.start_date.between(seven_days_ago, date.today()),
+                    Match.season == '2024'
+                )
+                .all()
+)
+            print(f"Found {len(recent_matches)} matches between {seven_days_ago}, and today")
+            
+            # Collect team IDs
+            active_teams = set()
+            for match in recent_matches:
+                if match.home_team_id:
+                    team_id = match.home_team_id.upper()
+                    active_teams.add(team_id)
+                if match.away_team_id:
+                    team_id = match.away_team_id.upper()
+                    active_teams.add(team_id)
+            
+            print(f"\nFound {len(active_teams)} unique teams")
+
+            # Get players from rosters using correct season_id
+            print(f"\n=== Getting Players for Season {season_id} ===")
+            active_players = (
+                session.query(PlayerRoster.person_id)
+                .filter(
+                    func.upper(PlayerRoster.team_id).in_([tid for tid in active_teams]),
+                    PlayerRoster.season_id == season_id
+                )
+                .distinct()
+            ).all()
+            
+            player_list = [p[0] for p in active_players if p[0]]
+            print(f"Found {len(player_list)} active players")
+            
+            return player_list
             
         finally:
             session.close()
 
     def fetch_player_matches(self, person_id: str) -> Dict:
-        """Fetch match results for a player from January 1st onwards"""
+        """Fetch match results for a player from the last 7 days"""
         query = """query matchUps($personFilter: [td_PersonFilterOptions], $filter: td_MatchUpFilterOptions) {
             td_matchUps(personFilter: $personFilter, filter: $filter) {
                 totalItems
@@ -133,6 +208,12 @@ class PlayerMatchesCollector:
             }
         }"""
 
+        # Calculate date from 3 days ago
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        seven_days_ago = (today - timedelta(days=3)).strftime('%Y-%m-%d')
+        current_date = today.strftime('%Y-%m-%d')
+
         variables = {
             "personFilter": {
                 "ids": [{
@@ -141,8 +222,8 @@ class PlayerMatchesCollector:
                 }]
             },
             "filter": {
-                "start": {"after": "2025-01-01"},
-                "end": {"before": "2025-12-31"},
+                "start": {"after": seven_days_ago},
+                "end": {"before": current_date},
                 "statuses": ["DEFAULTED", "RETIRED", "WALKOVER", "COMPLETED", "ABANDONED"]
             }
         }
@@ -187,7 +268,7 @@ class PlayerMatchesCollector:
         
         return f"{date}-{tournament_id}-{'-'.join(player_ids)}-{match_data['type']}"
 
-    def store_player_matches(self, matches_data):
+    def store_player_matches(self, matches_data: Dict) -> None:
         """Store player match data from the API response"""
         if not self.Session:
             raise RuntimeError("Database not initialized")
@@ -208,20 +289,23 @@ class PlayerMatchesCollector:
                     # Create unique identifier for this match
                     match_identifier = self.create_match_identifier(match_item)
                     
-                    # Check if match already exists using the identifier
-                    existing_match = session.query(PlayerMatch).filter_by(match_identifier=match_identifier).first()
+                    # Check if match already exists
+                    existing_match = session.query(PlayerMatch).filter_by(
+                        match_identifier=match_identifier
+                    ).first()
                     
                     if existing_match:
                         # print(f"Skipping duplicate match: {match_identifier}")
                         skipped_count += 1
                         continue
                     
-                    # If we get here, this is a new match
+                    # Parse dates
                     start_time = datetime.fromisoformat(match_item['start'].replace('Z', '+00:00'))
                     end_time = datetime.fromisoformat(match_item['end'].replace('Z', '+00:00'))
                     
+                    # Create match record
                     match = PlayerMatch(
-                        match_identifier=match_identifier,  # Store the identifier
+                        match_identifier=match_identifier,
                         winning_side=match_item['winningSide'],
                         start_time=start_time,
                         end_time=end_time,
@@ -232,7 +316,6 @@ class PlayerMatchesCollector:
                         tournament_id=match_item['tournament']['providerTournamentId'],
                         score_string=match_item['score']['scoreString'],
                         collection_position=match_item.get('collectionPosition')
-
                     )
                     session.add(match)
                     session.flush()
@@ -279,7 +362,7 @@ class PlayerMatchesCollector:
                     
                     session.commit()
                     stored_count += 1
-                    # print(f"Successfully stored new match: {match_identifier}")
+                    print(f"Successfully stored new match: {match_identifier}")
                     
                 except Exception as e:
                     print(f"Error storing match: {e}")
@@ -297,56 +380,46 @@ class PlayerMatchesCollector:
         finally:
             session.close()
 
-    # For player matches collector
     def store_all_player_matches(self) -> None:
         """Update matches for all recently active players"""
         if not self.Session:
             raise RuntimeError("Database not initialized")
-                
-        session = self.Session()
+            
+        # First try the ORM method, if that fails try the SQL method
         try:
+            active_players = self.get_recently_active_players_orm()
+            # If ORM method returns no players, try SQL method
+            if not active_players:
+                print("No players found with ORM method, trying SQL method")
+                active_players = self.get_recently_active_players()
+        except Exception as e:
+            print(f"Error with ORM method: {e}, trying SQL method")
             active_players = self.get_recently_active_players()
-            total_players = len(active_players)
-            print(f"Found {total_players} recently active players to process")
-            
-            success_count = 0
-            error_count = 0
-            
-            for idx, player_id in enumerate(active_players, 1):
-                try:
-                    print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
-                    
-                    # Fetch and store new matches
-                    matches_data = self.fetch_player_matches(player_id)
-                    if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
-                        self.store_player_matches(matches_data)
-                        success_count += 1
-                    
-                except Exception as e:
-                    error_count += 1
-                    print(f"Error processing player {player_id}: {e}")
-                    continue
                 
-                time.sleep(1)  # Rate limiting
+        total_players = len(active_players)
+        print(f"Found {total_players} recently active players to process")
+        
+        success_count = 0
+        error_count = 0
+        
+        for idx, player_id in enumerate(active_players, 1):
+            try:
+                print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
+                
+                # Fetch and store new matches
+                matches_data = self.fetch_player_matches(player_id)
+                if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
+                    self.store_player_matches(matches_data)
+                    success_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                print(f"Error processing player {player_id}: {e}")
+                continue
             
-            print("\nProcessing completed!")
-            print(f"Successfully processed: {success_count} players")
-            print(f"Errors: {error_count} players")
-            print(f"Total: {total_players} players")
-            
-        except Exception as e:
-            print(f"Error in main process: {e}")
-        finally:
-            session.close()
-
-    
-    async def process_single_player(self, player_id: str) -> bool:
-        try:
-            # Convert fetch_player_matches to async
-            matches_data = await self.fetch_player_matches_async(player_id)
-            if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
-                await self.store_player_matches_async(matches_data)
-                return True
-        except Exception as e:
-            logging.error(f"Error processing player {player_id}: {str(e)}")
-            return False
+            time.sleep(1)  # Rate limiting
+        
+        print("\nProcessing completed!")
+        print(f"Successfully processed: {success_count} players")
+        print(f"Errors: {error_count} players")
+        print(f"Total: {total_players} players")

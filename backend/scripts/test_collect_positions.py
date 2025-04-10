@@ -1,14 +1,10 @@
-#!/usr/bin/env python
-# update_match_positions.py
-# Script to update collection_position in player_matches table
-
 import os
 import sys
 from pathlib import Path
 import asyncio
 import logging
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 import argparse
 from sqlalchemy import create_engine, func, or_, text
 from sqlalchemy.orm import sessionmaker
@@ -254,7 +250,7 @@ class MatchPositionUpdater:
             SELECT DISTINCT pp.person_id 
             FROM player_match_participants pp
             JOIN player_matches pm ON pp.match_id = pm.id
-            WHERE pm.start_time >= '2025-01-01'
+            WHERE pm.start_time >= '2024-06-01'
             """
             
             result = session.execute(query).fetchall()
@@ -318,7 +314,7 @@ class MatchPositionUpdater:
             count_query = text("""
             SELECT COUNT(*) FROM player_matches 
             WHERE collection_position IS NULL 
-            AND start_time >= '2025-01-01'
+            AND start_time >= '2024-06-01'
             """)
             null_count = session.execute(count_query).scalar()
             logging.info(f"Found {null_count} matches with NULL collection_position")
@@ -330,7 +326,7 @@ class MatchPositionUpdater:
             FROM player_match_participants pmp
             JOIN player_matches pm ON pmp.match_id = pm.id
             WHERE pm.collection_position IS NULL
-            AND pm.start_time >= '2025-01-01'
+            AND pm.start_time >= '2024-06-01'
             AND pmp.person_id IS NOT NULL
             LIMIT {batch_size}  -- Process in smaller batches
             """)
@@ -406,122 +402,30 @@ class MatchPositionUpdater:
 async def main():
     """Main function to run the update"""
     try:
-        # Parse command line arguments
-        import argparse
-        parser = argparse.ArgumentParser(description="Update match positions in player_matches table")
-        parser.add_argument('--batch-size', type=int, default=100, help='Number of players per batch')
-        parser.add_argument('--max-batches', type=int, default=0, help='Maximum number of batches to process (0 for all)')
-        parser.add_argument('--sleep', type=int, default=5, help='Seconds to sleep between batches')
-        args = parser.parse_args()
-        
         logging.info("Starting match position update")
         start_time = datetime.now()
         
         updater = MatchPositionUpdater(DATABASE_URL)
         
-        # Get initial count of NULL positions
-        session = updater.Session()
-        count_query = text("""
-        SELECT COUNT(*) FROM player_matches 
-        WHERE collection_position IS NULL 
-        AND start_time >= '2024-06-01'
-        """)
-        initial_count = session.execute(count_query).scalar() or 0
-        session.close()
+        # Add a command-line argument parser
+        import argparse
+        parser = argparse.ArgumentParser(description="Update match positions in player_matches table")
+        parser.add_argument('--limit', type=int, default=1000, help='Limit number of players to process')
+        parser.add_argument('--batch', action='store_true', help='Process in batches')
+        args = parser.parse_args()
         
-        logging.info(f"Found {initial_count} matches with NULL collection_position")
+        # Choose one of the following methods:
+        # 1. Update all match positions regardless of current value
+        # updated, skipped = updater.update_all_match_positions()
+        # logging.info(f"Updated {updated} matches, skipped {skipped} matches")
         
-        # Process batches until all matches are updated or max batches reached
-        batch_num = 0
-        total_updated = 0
-        remaining = initial_count
-        zero_updates_count = 0
-        
-        while remaining > 0:
-            batch_num += 1
-            batch_start = datetime.now()
-            
-            # Check if we've reached the maximum number of batches
-            if args.max_batches > 0 and batch_num > args.max_batches:
-                logging.info(f"Reached maximum batch limit of {args.max_batches}")
-                break
-                
-            logging.info(f"Processing batch {batch_num} (remaining: {remaining})")
-            
-            # Process a batch with the specified batch size
-            try:
-                # Override sys.argv temporarily for the batch size
-                original_argv = sys.argv.copy()
-                sys.argv = [sys.argv[0], str(args.batch_size)]
-                
-                updated = updater.update_null_positions()
-                
-                # Restore original argv
-                sys.argv = original_argv
-                
-                total_updated += updated
-                
-                # Check if we're making progress
-                if updated == 0:
-                    zero_updates_count += 1
-                    if zero_updates_count >= 3:
-                        logging.warning(f"No updates in {zero_updates_count} consecutive batches")
-                        if zero_updates_count >= 5:
-                            logging.error("Stopping after 5 consecutive zero-update batches")
-                            break
-                else:
-                    zero_updates_count = 0
-                
-            except Exception as e:
-                logging.error(f"Error processing batch {batch_num}: {e}")
-                continue
-            
-            # Check remaining NULL positions
-            try:
-                session = updater.Session()
-                current_count = session.execute(count_query).scalar() or 0
-                session.close()
-                
-                remaining = current_count
-                
-                batch_duration = (datetime.now() - batch_start).total_seconds() / 60.0
-                total_duration = (datetime.now() - start_time).total_seconds() / 60.0
-                
-                # Calculate estimated remaining time
-                if batch_num > 1 and total_updated > 0:
-                    rate = total_updated / total_duration  # updates per minute
-                    remaining_est = remaining / rate if rate > 0 else float('inf')
-                    
-                    logging.info(f"Batch {batch_num} completed in {batch_duration:.1f} minutes")
-                    logging.info(f"Updated {updated} matches in this batch")
-                    logging.info(f"Progress: {total_updated}/{initial_count} ({(total_updated/initial_count*100):.1f}%) updated")
-                    logging.info(f"Estimated time remaining: {remaining_est:.1f} minutes")
-                else:
-                    logging.info(f"Batch {batch_num} completed in {batch_duration:.1f} minutes")
-                    logging.info(f"Updated {updated} matches in this batch")
-                
-            except Exception as e:
-                logging.error(f"Error checking remaining matches: {e}")
-                # Continue with the loop even if the check fails
-            
-            # Break if no matches remain to be updated
-            if remaining == 0:
-                logging.info("All matches have been updated! 🎉")
-                break
-                
-            # Sleep between batches
-            if args.sleep > 0 and remaining > 0:
-                logging.info(f"Sleeping for {args.sleep} seconds before next batch...")
-                await asyncio.sleep(args.sleep)
+        # 2. Only update matches with NULL position value
+        updated = updater.update_null_positions()
+        logging.info(f"Updated {updated} matches with NULL position values")
         
         end_time = datetime.now()
-        total_duration = (end_time - start_time).total_seconds() / 60.0
-        
-        logging.info(f"Process completed after {batch_num} batches")
-        logging.info(f"Total matches updated: {total_updated}")
-        logging.info(f"Remaining matches with NULL positions: {remaining}")
-        logging.info(f"Total duration: {total_duration:.1f} minutes")
-        
+        duration = end_time - start_time
+        logging.info(f"Completed match position update. Duration: {duration}")
     except Exception as e:
         logging.error(f"Error in match position update: {str(e)}")
         raise
