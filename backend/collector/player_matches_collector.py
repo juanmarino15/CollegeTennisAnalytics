@@ -381,45 +381,52 @@ class PlayerMatchesCollector:
             session.close()
 
     def store_all_player_matches(self) -> None:
-        """Update matches for all recently active players"""
-        if not self.Session:
-            raise RuntimeError("Database not initialized")
-            
-        # First try the ORM method, if that fails try the SQL method
         try:
-            active_players = self.get_recently_active_players_orm()
-            # If ORM method returns no players, try SQL method
-            if not active_players:
-                print("No players found with ORM method, trying SQL method")
-                active_players = self.get_recently_active_players()
-        except Exception as e:
-            print(f"Error with ORM method: {e}, trying SQL method")
-            active_players = self.get_recently_active_players()
+            if not self.Session:
+                raise RuntimeError("Database not initialized")
                 
-        total_players = len(active_players)
-        print(f"Found {total_players} recently active players to process")
-        
-        success_count = 0
-        error_count = 0
-        
-        for idx, player_id in enumerate(active_players, 1):
+            # First try the ORM method, if that fails try the SQL method
             try:
-                print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
-                
-                # Fetch and store new matches
-                matches_data = self.fetch_player_matches(player_id)
-                if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
-                    self.store_player_matches(matches_data)
-                    success_count += 1
-                
+                active_players = self.get_recently_active_players_orm()
+                # If ORM method returns no players, try SQL method
+                if not active_players:
+                    print("No players found with ORM method, trying SQL method")
+                    active_players = self.get_recently_active_players()
             except Exception as e:
-                error_count += 1
-                print(f"Error processing player {player_id}: {e}")
-                continue
+                print(f"Error with ORM method: {e}, trying SQL method")
+                active_players = self.get_recently_active_players()
+                    
+            total_players = len(active_players)
+            print(f"Found {total_players} recently active players to process")
             
-            time.sleep(1)  # Rate limiting
+            success_count = 0
+            error_count = 0
+            
+            for idx, player_id in enumerate(active_players, 1):
+                try:
+                    print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
+                    
+                    # Fetch and store new matches
+                    matches_data = self.fetch_player_matches(player_id)
+                    if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
+                        self.store_player_matches(matches_data)
+                        success_count += 1
+                    
+                except Exception as e:
+                    error_count += 1
+                    print(f"Error processing player {player_id}: {e}")
+                    continue
+                
+                time.sleep(1)  # Rate limiting
+            
+            print("\nProcessing completed!")
+            print(f"Successfully processed: {success_count} players")
+            print(f"Errors: {error_count} players")
+            print(f"Total: {total_players} players")
+            return True  # Explicitly return success
+            
+            
+        except Exception as e:
+            print(f"Fatal error in store_all_player_matches: {e}")
+            return False  # Indicate failure
         
-        print("\nProcessing completed!")
-        print(f"Successfully processed: {success_count} players")
-        print(f"Errors: {error_count} players")
-        print(f"Total: {total_players} players")

@@ -57,14 +57,20 @@ def update_player_matches():
         start_time = datetime.now()
         
         collector = PlayerMatchesCollector(DATABASE_URL)
-        collector.store_all_player_matches()
+        result = collector.store_all_player_matches()
         
+        if not result:
+            logging.warning("store_all_player_matches reported failure")
+            # Decide if you want to raise an exception here or continue
+            
         end_time = datetime.now()
         duration = end_time - start_time
         logging.info(f"Completed player matches update. Duration: {duration}")
+        return True  # Explicitly return success
     except Exception as e:
         logging.error(f"Error in player matches update: {str(e)}")
-        raise
+        # Don't raise here, just return False
+        return False
 
 async def update_recent_rosters():
     """Update rosters for schools with recent matches"""
