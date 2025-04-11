@@ -92,8 +92,8 @@ async def update_recent_rosters():
 async def main():
     parser = argparse.ArgumentParser(description='Update tennis data')
     parser.add_argument('--matches', action='store_true', help='Update team matches')
-    parser.add_argument('--player-matches', action='store_true', help='Update player matches')
     parser.add_argument('--rosters', action='store_true', help='Update rosters for teams with recent matches')
+    parser.add_argument('--player-matches', action='store_true', help='Update player matches')
     parser.add_argument('--all', action='store_true', help='Update all data')
     
     args = parser.parse_args()
@@ -106,11 +106,11 @@ async def main():
         if args.all or args.matches:
             await update_matches()
             
-        if args.all or args.player_matches:
-            update_player_matches()
-            
         if args.all or args.rosters:
             await update_recent_rosters()
+        
+        if args.all or args.player_matches:
+            update_player_matches()
             
     except Exception as e:
         logging.error(f"Error in update process: {str(e)}")
