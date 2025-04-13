@@ -63,10 +63,10 @@ class PlayerMatchesCollector:
             ),
             recent_teams AS (
                 SELECT DISTINCT UPPER(home_team_id) AS team_id FROM matches 
-                WHERE start_date BETWEEN CURRENT_DATE - INTERVAL '7 days' AND CURRENT_DATE AND season = '2024'
+                WHERE start_date BETWEEN CURRENT_DATE - INTERVAL '5 days' AND CURRENT_DATE AND season = '2024'
                 UNION
                 SELECT DISTINCT UPPER(away_team_id) AS team_id FROM matches 
-                WHERE start_date BETWEEN CURRENT_DATE - INTERVAL '7 days' AND CURRENT_DATE AND season = '2024'
+                WHERE start_date BETWEEN CURRENT_DATE - INTERVAL '5 days' AND CURRENT_DATE AND season = '2024'
             )
             SELECT DISTINCT pr.person_id 
             FROM player_rosters pr
@@ -110,7 +110,7 @@ class PlayerMatchesCollector:
             # Get teams from recent matches
             print("\n=== Getting Recent Matches ===")
            # Calculate date from 7 days ago
-            seven_days_ago = date.today() - timedelta(days=3)
+            seven_days_ago = date.today() - timedelta(days=5)
 
             recent_matches = (
                 session.query(Match)
@@ -153,8 +153,8 @@ class PlayerMatchesCollector:
         finally:
             session.close()
 
-    def fetch_player_matches(self, person_id: str) -> Dict:
-        """Fetch match results for a player from the last 7 days"""
+    def fetch_player_matches(self, person_id: str, days_back: int = 5) -> Dict:
+        """Fetch match results for a player with configurable date range"""
         query = """query matchUps($personFilter: [td_PersonFilterOptions], $filter: td_MatchUpFilterOptions) {
             td_matchUps(personFilter: $personFilter, filter: $filter) {
                 totalItems
@@ -208,10 +208,9 @@ class PlayerMatchesCollector:
             }
         }"""
 
-        # Calculate date from 3 days ago
-        from datetime import datetime, timedelta
+        # Calculate date range
         today = datetime.now()
-        seven_days_ago = (today - timedelta(days=3)).strftime('%Y-%m-%d')
+        days_ago = (today - timedelta(days=days_back)).strftime('%Y-%m-%d')
         current_date = today.strftime('%Y-%m-%d')
 
         variables = {
@@ -222,14 +221,14 @@ class PlayerMatchesCollector:
                 }]
             },
             "filter": {
-                "start": {"after": seven_days_ago},
+                "start": {"after": days_ago},
                 "end": {"before": current_date},
                 "statuses": ["DEFAULTED", "RETIRED", "WALKOVER", "COMPLETED", "ABANDONED"]
             }
         }
 
         try:
-            print(f"Fetching matches for player {person_id}...")
+            print(f"Fetching matches for player {person_id} from {days_ago} to {current_date}...")
             response = requests.post(
                 self.api_url,
                 json={
@@ -256,17 +255,41 @@ class PlayerMatchesCollector:
             return {}
 
     def create_match_identifier(self, match_data: Dict) -> str:
-        """Create a unique identifier for a match"""
-        player_ids = []
-        for side in match_data['sides']:
-            for player in side['players']:
-                player_ids.append(player['person']['externalID'])
-        player_ids.sort()
-        
-        date = match_data['start'].split('T')[0]
-        tournament_id = match_data['tournament']['providerTournamentId']
-        
-        return f"{date}-{tournament_id}-{'-'.join(player_ids)}-{match_data['type']}"
+        """Create a unique identifier for a match with improved logic"""
+        try:
+            # Extract all player IDs from both sides
+            player_ids = []
+            for side in match_data.get('sides', []):
+                if not side:
+                    continue
+                for player in side.get('players', []):
+                    if player and 'person' in player and player['person'] and 'externalID' in player['person']:
+                        player_ids.append(player['person']['externalID'])
+            
+            # Sort player IDs for consistency
+            player_ids.sort()
+            
+            # Extract date information
+            date_str = match_data.get('start', '').split('T')[0] if match_data.get('start') else 'unknown_date'
+            
+            # Extract tournament ID
+            tournament_data = match_data.get('tournament', {})
+            tournament_id = tournament_data.get('providerTournamentId', 'unknown_tournament') if tournament_data else 'unknown_tournament'
+            
+            # Extract match type
+            match_type = match_data.get('type', 'unknown_type')
+            
+            # Extract collection position (for dual matches)
+            collection_pos = match_data.get('collectionPosition', 'np')
+            
+            # Create a comprehensive identifier that minimizes collision risk
+            identifier = f"{date_str}-{tournament_id}-{match_type}-{collection_pos}-{'-'.join(player_ids)}"
+            
+            return identifier
+        except Exception as e:
+            print(f"Error creating match identifier: {e}")
+            # Fallback to timestamp to avoid duplication errors
+            return f"error-identifier-{datetime.now().timestamp()}"
 
     def store_player_matches(self, matches_data: Dict) -> None:
         """Store player match data from the API response"""
@@ -286,6 +309,11 @@ class PlayerMatchesCollector:
             
             for match_item in matches:
                 try:
+                    # Skip matches with incomplete data
+                    if not match_item or 'sides' not in match_item or not match_item.get('sides'):
+                        print(f"Skipping match with incomplete data structure")
+                        continue
+                    
                     # Create unique identifier for this match
                     match_identifier = self.create_match_identifier(match_item)
                     
@@ -299,66 +327,90 @@ class PlayerMatchesCollector:
                         skipped_count += 1
                         continue
                     
-                    # Parse dates
-                    start_time = datetime.fromisoformat(match_item['start'].replace('Z', '+00:00'))
-                    end_time = datetime.fromisoformat(match_item['end'].replace('Z', '+00:00'))
+                    # Parse dates with error handling
+                    try:
+                        start_time = datetime.fromisoformat(match_item['start'].replace('Z', '+00:00')) if match_item.get('start') else None
+                        end_time = datetime.fromisoformat(match_item['end'].replace('Z', '+00:00')) if match_item.get('end') else None
+                    except (ValueError, KeyError) as e:
+                        print(f"Date parsing error: {e}")
+                        start_time = datetime.now()
+                        end_time = datetime.now()
                     
-                    # Create match record
+                    # Create match record with safe access to nested objects
+                    tournament_data = match_item.get('tournament') or {}
+                    score_data = match_item.get('score') or {}
+                    
                     match = PlayerMatch(
                         match_identifier=match_identifier,
-                        winning_side=match_item['winningSide'],
+                        winning_side=match_item.get('winningSide'),
                         start_time=start_time,
                         end_time=end_time,
-                        match_type=match_item['type'],
-                        match_format=match_item['matchUpFormat'],
-                        status=match_item['status'],
-                        round_name=match_item['roundName'],
-                        tournament_id=match_item['tournament']['providerTournamentId'],
-                        score_string=match_item['score']['scoreString'],
+                        match_type=match_item.get('type'),
+                        match_format=match_item.get('matchUpFormat'),
+                        status=match_item.get('status'),
+                        round_name=match_item.get('roundName'),
+                        tournament_id=tournament_data.get('providerTournamentId', ''),
+                        score_string=score_data.get('scoreString', ''),
                         collection_position=match_item.get('collectionPosition')
                     )
                     session.add(match)
                     session.flush()
                     
-                    # Store sets information
-                    for set_idx, set_data in enumerate(match_item['score']['sets'], 1):
-                        match_set = PlayerMatchSet(
-                            match_id=match.id,
-                            set_number=set_idx,
-                            winner_games_won=set_data.get('winnerGamesWon'),
-                            loser_games_won=set_data.get('loserGamesWon'),
-                            win_ratio=set_data.get('winRatio'),
-                            tiebreak_winner_points=(
-                                set_data.get('tiebreaker', {}).get('winnerPointsWon') 
-                                if set_data.get('tiebreaker') else None
-                            ),
-                            tiebreak_loser_points=(
-                                set_data.get('tiebreaker', {}).get('loserPointsWon')
-                                if set_data.get('tiebreaker') else None
+                    # Store sets information safely
+                    sets_data = score_data.get('sets') or []
+                    for set_idx, set_data in enumerate(sets_data, 1):
+                        if not set_data:
+                            continue
+                            
+                        try:
+                            tiebreaker_data = set_data.get('tiebreaker') or {}
+                            
+                            match_set = PlayerMatchSet(
+                                match_id=match.id,
+                                set_number=set_idx,
+                                winner_games_won=set_data.get('winnerGamesWon'),
+                                loser_games_won=set_data.get('loserGamesWon'),
+                                win_ratio=set_data.get('winRatio'),
+                                tiebreak_winner_points=tiebreaker_data.get('winnerPointsWon'),
+                                tiebreak_loser_points=tiebreaker_data.get('loserPointsWon')
                             )
-                        )
-                        session.add(match_set)
+                            session.add(match_set)
+                        except Exception as e:
+                            print(f"Error storing set {set_idx}: {e}")
+                            continue
                     
-                    # Store participants
-                    for side in match_item['sides']:
+                    # Store participants safely
+                    for side in match_item.get('sides', []):
+                        if not side:
+                            continue
+                            
                         # Get team ID from extensions
                         team_id = None
-                        for ext in side['extensions']:
-                            if ext['name'] in ['teamId', 'schoolId']:
-                                team_id = ext['value']
+                        for ext in side.get('extensions', []):
+                            if ext and ext.get('name') in ['teamId', 'schoolId']:
+                                team_id = ext.get('value')
                                 break
                         
-                        for player in side['players']:
-                            participant = PlayerMatchParticipant(
-                                match_id=match.id,
-                                person_id=player['person']['externalID'],
-                                team_id=team_id,
-                                side_number=side['sideNumber'],
-                                family_name=player['person']['nativeFamilyName'],
-                                given_name=player['person']['nativeGivenName'],
-                                is_winner=(side['sideNumber'] == match_item['winningSide'])
-                            )
-                            session.add(participant)
+                        for player in side.get('players', []):
+                            try:
+                                if not player or 'person' not in player or not player.get('person'):
+                                    continue
+
+                                person_data = player.get('person') or {}
+                                
+                                participant = PlayerMatchParticipant(
+                                    match_id=match.id,
+                                    person_id=person_data.get('externalID', ''),
+                                    team_id=team_id,
+                                    side_number=side.get('sideNumber', ''),
+                                    family_name=person_data.get('nativeFamilyName', ''),
+                                    given_name=person_data.get('nativeGivenName', ''),
+                                    is_winner=(side.get('sideNumber') == match_item.get('winningSide'))
+                                )
+                                session.add(participant)
+                            except Exception as e:
+                                print(f"Error storing participant: {e}")
+                                continue
                     
                     session.commit()
                     stored_count += 1
@@ -380,7 +432,8 @@ class PlayerMatchesCollector:
         finally:
             session.close()
 
-    def store_all_player_matches(self) -> None:
+    def store_all_player_matches(self, days_back: int = 5) -> bool:
+        """Update matches for all recently active players with configurable days_back"""
         try:
             if not self.Session:
                 raise RuntimeError("Database not initialized")
@@ -398,6 +451,7 @@ class PlayerMatchesCollector:
                     
             total_players = len(active_players)
             print(f"Found {total_players} recently active players to process")
+            print(f"Fetching match data for the past {days_back} days")
             
             success_count = 0
             error_count = 0
@@ -406,8 +460,8 @@ class PlayerMatchesCollector:
                 try:
                     print(f"\nProcessing player {idx}/{total_players}: ID: {player_id}")
                     
-                    # Fetch and store new matches
-                    matches_data = self.fetch_player_matches(player_id)
+                    # Fetch and store new matches with specified days_back
+                    matches_data = self.fetch_player_matches(player_id, days_back)
                     if matches_data and 'data' in matches_data and 'td_matchUps' in matches_data['data']:
                         self.store_player_matches(matches_data)
                         success_count += 1
