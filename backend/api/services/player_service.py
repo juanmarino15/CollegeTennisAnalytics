@@ -71,14 +71,41 @@ class PlayerService:
             return self._player_to_dict(player) if player else None
         return None
 
-    def get_player_wtn(self, player_id: str):
-        if player_id:
-            upper_player_id = player_id.upper()
-            wtns = self.db.query(PlayerWTN).filter(
-                func.upper(PlayerWTN.person_id) == upper_player_id
-            ).all()
-            return [self._wtn_to_dict(wtn) for wtn in wtns]
-        return []
+    # Update the get_player_wtn method in player_service.py to support season filtering
+
+    def get_player_wtn(self, player_id: str, season: Optional[str] = None):
+        """Get World Tennis Number (WTN) ratings for a player, optionally filtered by season"""
+        if not player_id:
+            return []
+        
+        upper_player_id = player_id.upper() if player_id else None
+        
+        # Query WTN data
+        query = self.db.query(PlayerWTN).filter(
+            func.upper(PlayerWTN.person_id) == upper_player_id
+        )
+        
+        # Add season filter if provided
+        if season:
+            # Find the season_id that corresponds to the year
+            season_obj = self.db.query(Season).filter(
+                Season.name == season
+            ).first()
+            
+            if season_obj:
+                # If season found, filter by season_id
+                query = query.filter(PlayerWTN.season_id == season_obj.id)
+        
+        # Execute query and get results
+        wtns = query.all()
+        
+        # Log for debugging
+        print(f"Found {len(wtns)} WTN records for player {player_id}")
+        for wtn in wtns:
+            print(f"  Type: {wtn.wtn_type}, Number: {wtn.tennis_number}")
+        
+        # Convert to dict and return
+        return [self._wtn_to_dict(wtn) for wtn in wtns]
 
     def get_player_seasons(self, player_id: str):
         if player_id:

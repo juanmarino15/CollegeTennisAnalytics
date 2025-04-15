@@ -27,9 +27,14 @@ def get_player(player_id: str, db: Session = Depends(get_db)):
     return player
 
 @router.get("/{player_id}/wtn")
-def get_player_wtn(player_id: str, db: Session = Depends(get_db)):
+def get_player_wtn(
+    player_id: str, 
+    season: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get a player's World Tennis Number (WTN) ratings, optionally filtered by season"""
     service = PlayerService(db)
-    return service.get_player_wtn(player_id)
+    return service.get_player_wtn(player_id, season=season)
 
 @router.get("/{player_id}/matches")
 def get_player_matches(player_id: str, db: Session = Depends(get_db)):
