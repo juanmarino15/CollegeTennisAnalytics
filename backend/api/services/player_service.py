@@ -21,13 +21,14 @@ class PlayerService:
         }
     
     def _wtn_to_dict(self, wtn):
+        """Convert PlayerWTN model to dictionary with proper serialization"""
         return {
             "person_id": wtn.person_id,
             "tennis_id": wtn.tennis_id,
             "season_id": wtn.season_id,
             "wtn_type": wtn.wtn_type,
             "confidence": wtn.confidence,
-            "tennis_number": wtn.tennis_number,
+            "tennis_number": float(wtn.tennis_number) if wtn.tennis_number is not None else None,  # Ensure proper float conversion
             "is_ranked": wtn.is_ranked
         }
     
@@ -95,6 +96,9 @@ class PlayerService:
             if season_obj:
                 # If season found, filter by season_id
                 query = query.filter(PlayerWTN.season_id == season_obj.id)
+                print(f"Filtering WTN by season: {season} (ID: {season_obj.id})")
+            else:
+                print(f"Season not found: {season}")
         
         # Execute query and get results
         wtns = query.all()
@@ -102,29 +106,10 @@ class PlayerService:
         # Log for debugging
         print(f"Found {len(wtns)} WTN records for player {player_id}")
         for wtn in wtns:
-            print(f"  Type: {wtn.wtn_type}, Number: {wtn.tennis_number}")
+            print(f"  Type: {wtn.wtn_type}, Number: {wtn.tennis_number}, Season ID: {wtn.season_id}")
         
         # Convert to dict and return
         return [self._wtn_to_dict(wtn) for wtn in wtns]
-
-    def get_player_seasons(self, player_id: str):
-        if player_id:
-            upper_player_id = player_id.upper()
-            seasons = self.db.query(PlayerSeason).filter(
-                func.upper(PlayerSeason.person_id) == upper_player_id
-            ).all()
-            return [self._season_to_dict(season) for season in seasons]
-        return []
-
-    def get_player_matches(self, player_id: str):
-        if player_id:
-            upper_player_id = player_id.upper()
-            matches = self.db.query(PlayerMatch).join(PlayerMatchParticipant).filter(
-                func.upper(PlayerMatchParticipant.person_id) == upper_player_id
-            ).all()
-            return [self._match_to_dict(match) for match in matches]
-        return []
-    # Add these new methods to api/services/player_service.py
 
     def get_player_team(self, player_id: str, season: Optional[str] = None):
         """Get the team info for a player in a specific season"""

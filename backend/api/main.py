@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import matches, teams, players, schools,stats
+from .routers import matches, teams, players, schools,stats,seasons
 from .database import engine, Base
 
 # Create tables
@@ -27,6 +27,8 @@ app.include_router(teams.router, prefix="/api/v1/teams", tags=["teams"])
 app.include_router(players.router, prefix="/api/v1/players", tags=["players"])
 app.include_router(schools.router, prefix="/api/v1/schools", tags=["schools"])
 app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
+app.include_router(seasons.router, prefix="/api/v1/seasons", tags=["seasons"]) 
+
 
 if __name__ == "__main__":
     import uvicorn
