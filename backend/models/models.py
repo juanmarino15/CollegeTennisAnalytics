@@ -1,7 +1,7 @@
 # src/models.py
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, LargeBinary, ForeignKeyConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, LargeBinary, ForeignKeyConstraint,Date
 from sqlalchemy.orm import declarative_base, relationship
-from datetime import datetime
+from datetime import datetime,date
 from uuid import uuid4
 
 
@@ -272,3 +272,86 @@ class MatchLineupSet(Base):
     side1_won = Column(Boolean)
     
     lineup = relationship("MatchLineup", backref="sets")
+
+
+####RANKINGS#########
+# Rankings models
+class RankingList(Base):
+    __tablename__ = 'ranking_lists'
+    
+    id = Column(String, primary_key=True)
+    publish_date = Column(DateTime)
+    planned_publish_date = Column(Date)
+    division_type = Column(String)
+    gender = Column(String)
+    match_format = Column(String)
+    date_range_start = Column(DateTime)
+    date_range_end = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship defined later
+
+class TeamRanking(Base):
+    __tablename__ = 'team_rankings'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ranking_list_id = Column(String, ForeignKey('ranking_lists.id'))
+    team_id = Column(String, ForeignKey('teams.id'))
+    rank = Column(Integer)
+    points = Column(Float)
+    wins = Column(Integer)
+    losses = Column(Integer)
+    team_name = Column(String)
+    conference = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    ranking_list = relationship("RankingList", back_populates="team_rankings")
+    team = relationship("Team", back_populates="rankings")
+
+# Add relationships to existing models
+RankingList.team_rankings = relationship("TeamRanking", back_populates="ranking_list")
+Team.rankings = relationship("TeamRanking", back_populates="team")
+
+class PlayerRankingList(Base):
+    __tablename__ = 'player_ranking_lists'
+    
+    id = Column(String, primary_key=True)  # e.g., "2024-25_d1_men_singles_p13_v1"
+    publish_date = Column(DateTime)
+    planned_publish_date = Column(Date)
+    division_type = Column(String)  # e.g., "DIV1"
+    gender = Column(String)  # "M" or "F"
+    match_format = Column(String)  # "SINGLES" or "DOUBLES"
+    date_range_start = Column(DateTime)
+    date_range_end = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship defined below
+    player_rankings = relationship("PlayerRanking", back_populates="ranking_list")
+
+class PlayerRanking(Base):
+    __tablename__ = 'player_rankings'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ranking_list_id = Column(String, ForeignKey('player_ranking_lists.id'))
+    player_id = Column(String, ForeignKey('players.person_id'))
+    team_id = Column(String, ForeignKey('teams.id'))
+    rank = Column(Integer)
+    points = Column(Float)
+    wins = Column(Integer)
+    losses = Column(Integer)
+    player_name = Column(String)
+    team_name = Column(String)
+    conference = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    ranking_list = relationship("PlayerRankingList", back_populates="player_rankings")
+    player = relationship("Player", back_populates="rankings")
+    team = relationship("Team", back_populates="player_rankings")
+
+# Add these relationships to existing models
+Player.rankings = relationship("PlayerRanking", back_populates="player")
+Team.player_rankings = relationship("PlayerRanking", back_populates="team")

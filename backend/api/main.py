@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import matches, teams, players, schools,stats,seasons
+from .routers import matches, teams, players, schools,stats,seasons,rankings
 from .database import engine, Base
+
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -28,6 +29,8 @@ app.include_router(players.router, prefix="/api/v1/players", tags=["players"])
 app.include_router(schools.router, prefix="/api/v1/schools", tags=["schools"])
 app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
 app.include_router(seasons.router, prefix="/api/v1/seasons", tags=["seasons"]) 
+app.include_router(rankings.router, prefix="/api/v1/rankings", tags=["rankings"])
+
 
 
 if __name__ == "__main__":
