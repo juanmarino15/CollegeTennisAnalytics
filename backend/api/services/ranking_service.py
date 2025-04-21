@@ -14,9 +14,11 @@ class RankingService:
         self.db = db
     
     # Team rankings methods
-    def get_team_ranking_lists(self, division_type: Optional[str] = None, gender: Optional[str] = None, limit: int = 10):
-        """Get team ranking lists with optional filters"""
-        query = self.db.query(RankingList).order_by(desc(RankingList.publish_date))
+    def get_team_ranking_lists(self, division_type: Optional[str] = None, gender: Optional[str] = None, limit: Optional[int] = None):
+        """Get team ranking lists with optional filters, always sorted by publish_date desc"""
+        query = self.db.query(RankingList).filter(
+            RankingList.publish_date.isnot(None)  
+        ).order_by(desc(RankingList.publish_date))
         
         if division_type:
             query = query.filter(RankingList.division_type == division_type)
@@ -24,7 +26,11 @@ class RankingService:
         if gender:
             query = query.filter(RankingList.gender == gender)
         
-        return query.limit(limit).all()
+        # Only apply limit if one is provided
+        if limit:
+            query = query.limit(limit)
+        
+        return query.all()
     
     def get_latest_team_ranking_list(self, division_type: str = "DIV1", gender: str = "M"):
         """Get the most recent team ranking list for the given division and gender"""
@@ -62,10 +68,12 @@ class RankingService:
         return result
     
     # Player rankings methods
-    def get_player_ranking_lists(self, division_type: Optional[str] = None, gender: Optional[str] = None, match_format: str = "SINGLES", limit: int = 10):
-        """Get player ranking lists with optional filters"""
+    def get_player_ranking_lists(self, division_type: Optional[str] = None, gender: Optional[str] = None, match_format: str = "SINGLES", limit: Optional[int] = None):
+        """Get player ranking lists with optional filters, always sorted by publish_date desc"""
         query = self.db.query(PlayerRankingList).filter(
-            PlayerRankingList.match_format == match_format
+            PlayerRankingList.match_format == match_format,
+            # Add filters to exclude null publish dates
+            PlayerRankingList.publish_date.isnot(None)
         ).order_by(desc(PlayerRankingList.publish_date))
         
         if division_type:
@@ -74,7 +82,11 @@ class RankingService:
         if gender:
             query = query.filter(PlayerRankingList.gender == gender)
         
-        return query.limit(limit).all()
+        # Only apply limit if one is provided
+        if limit:
+            query = query.limit(limit)
+        
+        return query.all()
     
     def get_latest_player_ranking_list(self, division_type: str = "DIV1", gender: str = "M", match_format: str = "SINGLES"):
         """Get the most recent player ranking list for the given parameters"""

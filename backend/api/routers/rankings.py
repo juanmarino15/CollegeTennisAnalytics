@@ -18,10 +18,10 @@ router = APIRouter()
 def get_team_ranking_lists(
     division_type: Optional[str] = None,
     gender: Optional[str] = None,
-    limit: int = 10,
+    limit: Optional[int] = None, 
     db: Session = Depends(get_db)
 ):
-    """Get available team ranking lists with optional filters"""
+    """Get available team ranking lists with optional filters, always sorted by publish_date desc"""
     service = RankingService(db)
     return service.get_team_ranking_lists(division_type=division_type, gender=gender, limit=limit)
 
@@ -66,10 +66,10 @@ def get_team_ranking_history(
 def get_singles_ranking_lists(
     division_type: Optional[str] = None,
     gender: Optional[str] = None,
-    limit: int = 10,
+    limit: Optional[int] = None,  # Make limit optional
     db: Session = Depends(get_db)
 ):
-    """Get available singles ranking lists with optional filters"""
+    """Get available singles ranking lists with optional filters, always sorted by publish_date desc"""
     service = RankingService(db)
     return service.get_player_ranking_lists(
         division_type=division_type, 
@@ -127,10 +127,10 @@ def get_player_singles_history(
 def get_doubles_ranking_lists(
     division_type: Optional[str] = None,
     gender: Optional[str] = None,
-    limit: int = 10,
+    limit: Optional[int] = None,  # Make limit optional
     db: Session = Depends(get_db)
 ):
-    """Get available doubles ranking lists with optional filters"""
+    """Get available doubles ranking lists with optional filters, always sorted by publish_date desc"""
     service = RankingService(db)
     return service.get_player_ranking_lists(
         division_type=division_type, 
