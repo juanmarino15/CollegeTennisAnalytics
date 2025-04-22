@@ -7,7 +7,7 @@ from datetime import date
 from api.services.ranking_service import RankingService
 from api.schemas.ranking import (
     RankingListResponse, TeamRankingResponse, 
-    PlayerRankingListResponse, PlayerRankingResponse
+    PlayerRankingListResponse, PlayerRankingResponse,DoublesRankingResponse
 )
 from api.database import get_db
 
@@ -180,5 +180,29 @@ def get_player_doubles_history(
     return service.get_player_ranking_history(
         player_id=player_id, 
         match_format="DOUBLES",
+        limit=limit
+    )
+
+# Add to the existing doubles endpoints:
+@router.get("/doubles/lists/{ranking_id}", response_model=List[DoublesRankingResponse])
+def get_doubles_ranking_details(
+    ranking_id: str,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get detailed doubles rankings for a specific ranking list"""
+    service = RankingService(db)
+    return service.get_doubles_rankings(ranking_id=ranking_id, limit=limit)
+
+@router.get("/doubles/players/{player_id}/history")
+def get_player_doubles_history(
+    player_id: str,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get doubles ranking history for a specific player"""
+    service = RankingService(db)
+    return service.get_player_doubles_history(
+        player_id=player_id, 
         limit=limit
     )

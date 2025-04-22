@@ -1,12 +1,13 @@
 # api/services/ranking_service.py
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,or_
 from sqlalchemy import func, desc
 from typing import List, Optional
 
+
 from models.models import (
     RankingList, TeamRanking, Team,
-    PlayerRankingList, PlayerRanking, Player
+    PlayerRankingList, PlayerRanking, Player,DoublesRanking
 )
 
 class RankingService:
@@ -122,6 +123,40 @@ class RankingService:
                 "losses": player_ranking.losses,
                 "team_id": player_ranking.team_id,
                 "team_name": player_ranking.team_name
+            })
+        
+        return result
+
+    def get_doubles_rankings(self, ranking_id: str, limit: int = 100):
+        """Get doubles team rankings for a specific ranking list"""
+        return self.db.query(DoublesRanking).filter(
+            DoublesRanking.ranking_list_id == ranking_id
+        ).order_by(DoublesRanking.rank).limit(limit).all()
+        
+    def get_player_doubles_history(self, player_id: str, limit: int = 10):
+        """Get doubles ranking history for a specific player"""
+        rankings = self.db.query(DoublesRanking, PlayerRankingList).join(
+            PlayerRankingList, DoublesRanking.ranking_list_id == PlayerRankingList.id
+        ).filter(
+            or_(
+                DoublesRanking.player1_id == player_id,
+                DoublesRanking.player2_id == player_id
+            )
+        ).order_by(desc(PlayerRankingList.publish_date)).limit(limit).all()
+        
+        result = []
+        for doubles_ranking, ranking_list in rankings:
+            result.append({
+                "ranking_list_id": ranking_list.id,
+                "publish_date": ranking_list.publish_date,
+                "rank": doubles_ranking.rank,
+                "points": doubles_ranking.points,
+                "wins": doubles_ranking.wins,
+                "losses": doubles_ranking.losses,
+                "team_id": doubles_ranking.team_id,
+                "team_name": doubles_ranking.team_name,
+                "partner_id": doubles_ranking.player2_id if doubles_ranking.player1_id == player_id else doubles_ranking.player1_id,
+                "partner_name": doubles_ranking.player2_name if doubles_ranking.player1_id == player_id else doubles_ranking.player1_name
             })
         
         return result

@@ -352,6 +352,30 @@ class PlayerRanking(Base):
     player = relationship("Player", back_populates="rankings")
     team = relationship("Team", back_populates="player_rankings")
 
-# Add these relationships to existing models
 Player.rankings = relationship("PlayerRanking", back_populates="player")
 Team.player_rankings = relationship("PlayerRanking", back_populates="team")
+
+class DoublesRanking(Base):
+    __tablename__ = 'doubles_rankings'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ranking_list_id = Column(String, ForeignKey('player_ranking_lists.id'))
+    team_id = Column(String, ForeignKey('teams.id'))
+    player1_id = Column(String, ForeignKey('players.person_id'))
+    player2_id = Column(String, ForeignKey('players.person_id'))
+    rank = Column(Integer)
+    points = Column(Float)
+    wins = Column(Integer)
+    losses = Column(Integer)
+    player1_name = Column(String)
+    player2_name = Column(String)
+    team_name = Column(String)
+    conference = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    ranking_list = relationship("PlayerRankingList")
+    team = relationship("Team")
+    player1 = relationship("Player", foreign_keys=[player1_id])
+    player2 = relationship("Player", foreign_keys=[player2_id])

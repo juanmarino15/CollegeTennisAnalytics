@@ -75,3 +75,19 @@ class PlayerRankingHistory(BaseSchema):
     player_id: str
     player_name: str
     rankings: List[PlayerRankingHistoryItem]
+
+class DoublesRankingBase(BaseSchema):
+    rank: int
+    points: float
+    wins: int
+    losses: int
+    player1_name: str
+    player2_name: str
+    team_name: str
+    conference: Optional[str] = None
+
+class DoublesRankingResponse(DoublesRankingBase):
+    team_id: str
+    player1_id: str
+    player2_id: str
+    ranking_list_id: str

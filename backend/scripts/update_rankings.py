@@ -98,7 +98,7 @@ def main():
     parser.add_argument('--women', action='store_true', help='Update women\'s rankings')
     parser.add_argument('--division', choices=['DIV1', 'DIV2', 'DIV3', 'ALL'], default='DIV1', help='Division to update')
     parser.add_argument('--format', choices=['TEAM', 'SINGLES', 'DOUBLES', 'ALL'], default='ALL', help='Match format to update')
-    parser.add_argument('--max-lists', type=int, default=3, help='Maximum number of ranking lists to process per format')
+    parser.add_argument('--max-lists', type=int, default=None, help='Maximum number of ranking lists to process per format')
     
     args = parser.parse_args()
     

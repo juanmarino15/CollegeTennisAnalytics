@@ -15,7 +15,7 @@ sys.path.append(str(parent_dir))
 
 from models.models import (
     Base, RankingList, TeamRanking, Team, 
-    PlayerRankingList, PlayerRanking, Player
+    PlayerRankingList, PlayerRanking, Player,DoublesRanking
 )
 
 # Configure logging
@@ -611,19 +611,20 @@ class RankingsCollector:
                 ranking_id = rank_list['id']
                 
                 # Check if we already have this ranking list stored
-                session = self.Session()
-                try:
-                    existing_rankings = session.query(PlayerRanking).filter_by(ranking_list_id=ranking_id).count()
-                    if existing_rankings > 0:
-                        logging.info(f"Ranking list {ranking_id} already has doubles rankings, skipping...")
-                        continue
-                finally:
-                    session.close()
+                # session = self.Session()
+                # try:
+                #     existing_rankings = session.query(DoublesRanking).filter_by(ranking_list_id=ranking_id).count()
+                #     if existing_rankings > 0:
+                #         logging.info(f"Ranking list {ranking_id} already has doubles rankings, skipping...")
+                #         continue
+                # finally:
+                #     session.close()
                 
                 # Fetch and store detailed ranking information
                 ranking_data = self.fetch_ranking_details(ranking_id)
                 if ranking_data:
-                    success = self.store_player_ranking_list(ranking_data)
+                    # Use the new store_doubles_ranking_list method instead of store_player_ranking_list
+                    success = self.store_doubles_ranking_list(ranking_data)
                     if success:
                         processed_count += 1
             
@@ -641,3 +642,128 @@ class RankingsCollector:
         self.collect_doubles_rankings(max_lists_to_process)
         
         logging.info("Completed collection of all ranking types")
+
+    def store_doubles_ranking_list(self, ranking_data):
+        """Store doubles ranking list metadata and rankings"""
+        if not self.Session:
+            logging.error("Database not initialized")
+            return False
+        
+        session = self.Session()
+        try:
+            # Extract ranking list metadata
+            ranking_id = ranking_data['id']
+            created_at = datetime.fromisoformat(ranking_data['createdAt'].replace('Z', '+00:00'))
+            division_type = ranking_data['divisionType']
+            gender = ranking_data['gender']
+            match_format = ranking_data['matchFormat']
+            date_range_start = datetime.fromisoformat(ranking_data['dateRange']['start'].replace('Z', '+00:00'))
+            date_range_end = datetime.fromisoformat(ranking_data['dateRange']['end'].replace('Z', '+00:00'))
+            
+            # Check if ranking list already exists in PlayerRankingList
+            existing_list = session.query(PlayerRankingList).get(ranking_id)
+            
+            if existing_list:
+                # Check if there are existing entries in DoublesRanking
+                existing_doubles = session.query(DoublesRanking).filter_by(
+                    ranking_list_id=ranking_id
+                ).count()
+                
+                if existing_doubles > 0:
+                    logging.info(f"Ranking list {ranking_id} already has doubles rankings, skipping...")
+                    return False
+                
+                logging.info(f"Ranking list {ranking_id} exists but has no doubles rankings. Processing...")
+            else:
+                # Create new ranking list
+                ranking_list = PlayerRankingList(
+                    id=ranking_id,
+                    division_type=division_type,
+                    gender=gender,
+                    match_format=match_format,
+                    date_range_start=date_range_start,
+                    date_range_end=date_range_end,
+                    created_at=created_at
+                )
+                session.add(ranking_list)
+                session.flush()
+            
+            # Extract and store doubles rankings
+            success_count = 0
+            
+            if 'rankingItems' in ranking_data and 'items' in ranking_data['rankingItems']:
+                items = ranking_data['rankingItems']['items']
+                
+                for item in items:
+                    try:
+                        # Get participants info
+                        if not item['participants'] or len(item['participants']) < 3:
+                            continue
+                        
+                        # Find team and player participants
+                        team_participant = None
+                        player_participants = []
+                        
+                        for participant in item['participants']:
+                            if participant['participantType'] == 'TEAM':
+                                team_participant = participant
+                            elif participant['participantType'] == 'INDIVIDUAL':
+                                player_participants.append(participant)
+                        
+                        if not team_participant or len(player_participants) < 2:
+                            continue
+                        
+                        team_id = team_participant['itemId']
+                        team_name = team_participant['name']
+                        player1_id = player_participants[0]['itemId']
+                        player1_name = player_participants[0]['name']
+                        player2_id = player_participants[1]['itemId']
+                        player2_name = player_participants[1]['name']
+                        conference = item.get('conference')
+                        
+                        # Find existing team with case-insensitive comparison
+                        existing_team = session.query(Team).filter(
+                            func.upper(Team.id) == func.upper(team_id)
+                        ).first()
+                        
+                        # Find existing players with case-insensitive comparison
+                        existing_player1 = session.query(Player).filter(
+                            func.upper(Player.person_id) == func.upper(player1_id)
+                        ).first()
+                        
+                        existing_player2 = session.query(Player).filter(
+                            func.upper(Player.person_id) == func.upper(player2_id)
+                        ).first()
+                        
+                        if existing_team and existing_player1 and existing_player2:
+                            # Create doubles ranking entry
+                            doubles_ranking = DoublesRanking(
+                                ranking_list_id=ranking_id,
+                                team_id=existing_team.id,
+                                player1_id=existing_player1.person_id,
+                                player2_id=existing_player2.person_id,
+                                rank=item['rank'],
+                                points=item['points']['total'],
+                                wins=item['wins']['total'],
+                                losses=item['losses']['total'],
+                                player1_name=player1_name,
+                                player2_name=player2_name,
+                                team_name=team_name,
+                                conference=conference
+                            )
+                            session.add(doubles_ranking)
+                            success_count += 1
+                    except Exception as e:
+                        logging.error(f"Error processing doubles ranking: {e}")
+                        continue
+                
+                session.commit()
+                logging.info(f"Successfully stored doubles ranking list {ranking_id} with {success_count} doubles rankings")
+                return True
+                
+        except Exception as e:
+            logging.error(f"Error storing doubles ranking list: {e}")
+            session.rollback()
+            return False
+        finally:
+            session.close()
