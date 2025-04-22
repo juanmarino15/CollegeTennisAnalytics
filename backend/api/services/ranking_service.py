@@ -1,7 +1,7 @@
 # api/services/ranking_service.py
 
-from sqlalchemy.orm import Session,or_
-from sqlalchemy import func, desc
+from sqlalchemy.orm import Session
+from sqlalchemy import func, desc, or_
 from typing import List, Optional
 
 
