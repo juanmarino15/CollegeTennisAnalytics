@@ -139,16 +139,6 @@ def get_doubles_ranking_lists(
         limit=limit
     )
 
-@router.get("/doubles/lists/{ranking_id}", response_model=List[PlayerRankingResponse])
-def get_doubles_ranking_details(
-    ranking_id: str,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get detailed doubles rankings for a specific ranking list"""
-    service = RankingService(db)
-    return service.get_player_rankings(ranking_id=ranking_id, limit=limit)
-
 @router.get("/doubles/latest")
 def get_latest_doubles_rankings(
     division_type: str = "DIV1",
@@ -183,7 +173,6 @@ def get_player_doubles_history(
         limit=limit
     )
 
-# Add to the existing doubles endpoints:
 @router.get("/doubles/lists/{ranking_id}", response_model=List[DoublesRankingResponse])
 def get_doubles_ranking_details(
     ranking_id: str,
