@@ -47,13 +47,14 @@ class RankingService:
             TeamRanking.ranking_list_id == ranking_id
         ).order_by(TeamRanking.rank).limit(limit).all()
     
-    def get_team_ranking_history(self, team_id: str):
+    def get_team_ranking_history(self, team_id: str, limit: int = 10):
         """Get ranking history for a specific team"""
         rankings = self.db.query(TeamRanking, RankingList).join(
             RankingList, TeamRanking.ranking_list_id == RankingList.id
         ).filter(
-            TeamRanking.team_id == team_id
-        ).order_by(desc(RankingList.publish_date)).all()
+            TeamRanking.team_id == team_id,
+            RankingList.publish_date.isnot(None)  
+        ).order_by(desc(RankingList.publish_date)).limit(limit).all()
         
         result = []
         for team_ranking, ranking_list in rankings:
