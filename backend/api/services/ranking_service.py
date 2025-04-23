@@ -52,8 +52,7 @@ class RankingService:
         rankings = self.db.query(TeamRanking, RankingList).join(
             RankingList, TeamRanking.ranking_list_id == RankingList.id
         ).filter(
-            TeamRanking.team_id == team_id,
-            RankingList.publish_date.isnot(None)  
+            TeamRanking.team_id == team_id
         ).order_by(desc(RankingList.publish_date)).limit(limit).all()
         
         result = []
