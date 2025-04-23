@@ -162,7 +162,7 @@ def get_latest_doubles_rankings(
 @router.get("/doubles/players/{player_id}/history")
 def get_player_doubles_history(
     player_id: str,
-    limit: int = 10,
+    limit: int = None,
     db: Session = Depends(get_db)
 ):
     """Get doubles ranking history for a specific player"""
