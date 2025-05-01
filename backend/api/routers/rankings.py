@@ -139,7 +139,6 @@ def get_doubles_ranking_lists(
         limit=limit
     )
 
-
 @router.get("/doubles/latest")
 def get_latest_doubles_rankings(
     division_type: str = "DIV1",

@@ -529,31 +529,60 @@ class MatchUpdatesService:
             return False
 
     def create_lineup(self, match_id: str, tie_match: Dict, match: Dict = None) -> MatchLineup:
-        """Create a MatchLineup instance"""
+        """Create a MatchLineup instance with proper team abbreviations"""
         # Get player IDs
         side1_player1_id = tie_match['side1']['participants'][0].get('personId')
         side2_player1_id = tie_match['side2']['participants'][0].get('personId')
 
-        # Get team names from team abbreviations
+        # Get team names from various sources
         side1_name = None
         side2_name = None
 
-        # If we have the match data with teams
-        if match and match.get('teams'):
-            # Try to get team names from teamAbbreviation
-            if tie_match['side1'].get('teamAbbreviation'):
+        # First try to get team abbreviations directly from the side data
+        if tie_match['side1'].get('teamAbbreviation'):
+            side1_name = tie_match['side1']['teamAbbreviation']
+        
+        if tie_match['side2'].get('teamAbbreviation'):
+            side2_name = tie_match['side2']['teamAbbreviation']
+
+        # If not found, try to get from match teams data
+        if not side1_name or not side2_name:
+            if match and match.get('teams'):
+                # Create a mapping of sideNumber to team abbreviation
+                team_abbrevs = {}
                 for team in match['teams']:
-                    if team.get('abbreviation') == tie_match['side1']['teamAbbreviation']:
+                    if 'abbreviation' in team and 'sideNumber' in team:
+                        team_abbrevs[team['sideNumber']] = team['abbreviation']
+                
+                # If we still don't have side1_name and a mapping exists
+                if not side1_name and '1' in team_abbrevs:
+                    side1_name = team_abbrevs['1']
+                
+                # If we still don't have side2_name and a mapping exists
+                if not side2_name and '2' in team_abbrevs:
+                    side2_name = team_abbrevs['2']
+
+        # As a last resort, if we have the match data but couldn't get the abbreviations
+        # from the usual sources, try to find the teams by ID and get their abbreviations
+        if (not side1_name or not side2_name) and match and match.get('teams'):
+            # Try to find which team is on which side by matching participants to teams
+            for participant in tie_match['side1'].get('participants', []):
+                for team in match.get('teams', []):
+                    if team.get('abbreviation'):
                         side1_name = team.get('abbreviation')
                         break
-
-            if tie_match['side2'].get('teamAbbreviation'):
-                for team in match['teams']:
-                    if team.get('abbreviation') == tie_match['side2']['teamAbbreviation']:
+                if side1_name:
+                    break
+                    
+            for participant in tie_match['side2'].get('participants', []):
+                for team in match.get('teams', []):
+                    if team.get('abbreviation'):
                         side2_name = team.get('abbreviation')
                         break
-                        
+                if side2_name:
+                    break
 
+        # Create the lineup object
         lineup = MatchLineup(
             id=tie_match['id'],
             match_id=match_id,
@@ -563,11 +592,11 @@ class MatchUpdatesService:
             side1_player1_id=side1_player1_id,
             side1_score=tie_match['side1']['score'].get('scoreString'),
             side1_won=tie_match['side1'].get('didWin', False),
-            side1_name=side1_name,  
+            side1_name=side1_name,  # Add the team abbreviation
             side2_player1_id=side2_player1_id,
             side2_score=tie_match['side2']['score'].get('scoreString'),
             side2_won=tie_match['side2'].get('didWin', False),
-            side2_name=side2_name  
+            side2_name=side2_name  # Add the team abbreviation
         )
 
         # Add doubles partners if exists
@@ -747,21 +776,46 @@ class MatchUpdatesService:
             session.close()
     
     def store_single_match(self, match_data):
-            if not self.Session:
-                raise RuntimeError("Database not initialized")
-                
-            session = self.Session()
-            try:
-                # First, validate and get team IDs
-                home_team_id = None
-                away_team_id = None
-                teams = match_data.get('teams', [])
-                
-                if not teams:
-                    raise ValueError(f"No teams found for match {match_data['id']}")
+        if not self.Session:
+            raise RuntimeError("Database not initialized")
+            
+        session = self.Session()
+        try:
+            # First, validate and get team IDs
+            home_team_id = None
+            away_team_id = None
+            teams = match_data.get('teams', [])
+            
+            if not teams:
+                raise ValueError(f"No teams found for match {match_data['id']}")
 
-                # Process home team
-                if match_data.get('homeTeam'):
+            # Process home team
+            if match_data.get('homeTeam'):
+                # Check if team exists first to preserve existing data
+                existing_home_team = session.query(Team).filter(
+                    func.upper(Team.id) == func.upper(match_data['homeTeam']['id'])
+                ).first()
+                
+                if existing_home_team:
+                    # Only update fields that are provided in the API data and not None
+                    existing_home_team.name = match_data['homeTeam']['name']
+                    
+                    if match_data['homeTeam'].get('abbreviation') is not None:
+                        existing_home_team.abbreviation = match_data['homeTeam']['abbreviation']
+                    
+                    # Only update division, conference, region if provided and not None
+                    if match_data['homeTeam'].get('division') is not None:
+                        existing_home_team.division = match_data['homeTeam']['division']
+                    if match_data['homeTeam'].get('conference') is not None:
+                        existing_home_team.conference = match_data['homeTeam']['conference']
+                    if match_data['homeTeam'].get('region') is not None:
+                        existing_home_team.region = match_data['homeTeam']['region']
+                        
+                    existing_home_team.gender = match_data['gender']
+                    session.merge(existing_home_team)
+                    home_team_id = existing_home_team.id
+                else:
+                    # Create new team if it doesn't exist
                     home_team = Team(
                         id=match_data['homeTeam']['id'],
                         name=match_data['homeTeam']['name'],
@@ -774,9 +828,33 @@ class MatchUpdatesService:
                     )
                     session.merge(home_team)
                     home_team_id = home_team.id
+            else:
+                # If no home team specified, use first team from teams list
+                home_team_data = teams[0]
+                # Check if team exists first to preserve existing data
+                existing_home_team = session.query(Team).filter(
+                    func.upper(Team.id) == func.upper(home_team_data['id'])
+                ).first()
+                
+                if existing_home_team:
+                    # Only update fields that are provided
+                    existing_home_team.name = home_team_data['name']
+                    
+                    if home_team_data.get('abbreviation') is not None:
+                        existing_home_team.abbreviation = home_team_data['abbreviation']
+                    
+                    # Only update division, conference, region if provided and not None
+                    if home_team_data.get('division') is not None:
+                        existing_home_team.division = home_team_data['division']
+                    if home_team_data.get('conference') is not None:
+                        existing_home_team.conference = home_team_data['conference']
+                    if home_team_data.get('region') is not None:
+                        existing_home_team.region = home_team_data['region']
+                        
+                    existing_home_team.gender = match_data['gender']
+                    session.merge(existing_home_team)
+                    home_team_id = existing_home_team.id
                 else:
-                    # If no home team specified, use first team from teams list
-                    home_team_data = teams[0]
                     home_team = Team(
                         id=home_team_data['id'],
                         name=home_team_data['name'],
@@ -789,16 +867,41 @@ class MatchUpdatesService:
                     )
                     session.merge(home_team)
                     home_team_id = home_team.id
-                    match_data['homeTeam'] = home_team_data  # Update match_data for later use
+                
+                match_data['homeTeam'] = home_team_data  # Update match_data for later use
 
-                # Find and process away team
-                if len(teams) > 1:
-                    away_team_data = next(
-                        (team for team in teams if team['id'] != home_team_id),
-                        teams[1]  # Fallback to second team if no other found
-                    )
+            # Find and process away team
+            if len(teams) > 1:
+                away_team_data = next(
+                    (team for team in teams if team['id'] != home_team_id),
+                    teams[1]  # Fallback to second team if no other found
+                )
+                
+                if away_team_data:
+                    # Check if team exists first to preserve existing data
+                    existing_away_team = session.query(Team).filter(
+                        func.upper(Team.id) == func.upper(away_team_data['id'])
+                    ).first()
                     
-                    if away_team_data:
+                    if existing_away_team:
+                        # Only update fields that are provided
+                        existing_away_team.name = away_team_data['name']
+                        
+                        if away_team_data.get('abbreviation') is not None:
+                            existing_away_team.abbreviation = away_team_data['abbreviation']
+                        
+                        # Only update division, conference, region if provided and not None
+                        if away_team_data.get('division') is not None:
+                            existing_away_team.division = away_team_data['division']
+                        if away_team_data.get('conference') is not None:
+                            existing_away_team.conference = away_team_data['conference']
+                        if away_team_data.get('region') is not None:
+                            existing_away_team.region = away_team_data['region']
+                            
+                        existing_away_team.gender = match_data['gender']
+                        session.merge(existing_away_team)
+                        away_team_id = existing_away_team.id
+                    else:
                         away_team = Team(
                             id=away_team_data['id'],
                             name=away_team_data['name'],
@@ -811,74 +914,72 @@ class MatchUpdatesService:
                         )
                         session.merge(away_team)
                         away_team_id = away_team.id
-
-                # Validate that we have both team IDs before proceeding
-                if not home_team_id or not away_team_id:
-                    raise ValueError(
-                        f"Invalid team IDs for match {match_data['id']}: "
-                        f"home={home_team_id}, away={away_team_id}"
-                    )
-
-                # Process and store match
-                utc_time = datetime.fromisoformat(match_data['startDateTime']['dateTimeString'].replace('Z', '+00:00'))
-                local_tz = pytz.timezone(match_data['startDateTime']['timezoneName'])
-                start_date = utc_time.astimezone(local_tz)   
-
-                # Set season to the previous year since matches are in spring
-                season_year = str(start_date.year - 1)
-                
-                match = Match(
-                    id=match_data['id'],
-                    start_date=start_date,
-                    timezone=match_data['startDateTime']['timezoneName'],
-                    no_scheduled_time=match_data['startDateTime']['noScheduledTime'],
-                    is_conference_match=match_data['isConferenceMatch'],
-                    gender=match_data['gender'],
-                    typename=match_data.get('__typename'),
-                    home_team_id=home_team_id,
-                    away_team_id=away_team_id,
-                    season=season_year,
-                    side_numbers=len(teams),
-                    completed=any(team.get('score') is not None for team in teams),
-                    scheduled_time=start_date if not match_data['startDateTime']['noScheduledTime'] else None
-                )
-                session.merge(match)
-
-                # Process and store match_teams relationships with validated team info
-                for team_data in teams:
-                    is_home = team_data['id'] == home_team_id
-                    team_match = MatchTeam(
-                        match_id=match.id,
-                        team_id=team_data['id'],
-                        score=team_data.get('score'),
-                        did_win=team_data.get('didWin'),
-                        side_number=team_data.get('sideNumber'),
-                        is_home_team=is_home,
-                        order_of_play=team_data.get('sideNumber'),
-                        team_position='home' if is_home else 'away'
-                    )
-                    session.merge(team_match)
-
-                # Process and store web links
-                for link_data in match_data.get('webLinks', []):
-                    web_link = WebLink(
-                        match_id=match.id,
-                        name=link_data['name'],
-                        url=link_data['url'],
-                        typename=link_data.get('__typename')
-                    )
-                    session.merge(web_link)
-
-                session.commit()
             
+            # Validate that we have both team IDs before proceeding
+            if not home_team_id or not away_team_id:
+                raise ValueError(
+                    f"Invalid team IDs for match {match_data['id']}: "
+                    f"home={home_team_id}, away={away_team_id}"
+                )
 
+            # Process and store match
+            utc_time = datetime.fromisoformat(match_data['startDateTime']['dateTimeString'].replace('Z', '+00:00'))
+            local_tz = pytz.timezone(match_data['startDateTime']['timezoneName'])
+            start_date = utc_time.astimezone(local_tz)   
 
-            except Exception as e:
-                print(f"Error storing match: {e}")
-                session.rollback()
-                raise
-            finally:
-                session.close()
+            # Set season to the previous year since matches are in spring
+            season_year = str(start_date.year - 1)
+            
+            match = Match(
+                id=match_data['id'],
+                start_date=start_date,
+                timezone=match_data['startDateTime']['timezoneName'],
+                no_scheduled_time=match_data['startDateTime']['noScheduledTime'],
+                is_conference_match=match_data['isConferenceMatch'],
+                gender=match_data['gender'],
+                typename=match_data.get('__typename'),
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                season=season_year,
+                side_numbers=len(teams),
+                completed=any(team.get('score') is not None for team in teams),
+                scheduled_time=start_date if not match_data['startDateTime']['noScheduledTime'] else None
+            )
+            session.merge(match)
+
+            # Process and store match_teams relationships with validated team info
+            for team_data in teams:
+                is_home = team_data['id'] == home_team_id
+                team_match = MatchTeam(
+                    match_id=match.id,
+                    team_id=team_data['id'],
+                    score=team_data.get('score'),
+                    did_win=team_data.get('didWin'),
+                    side_number=team_data.get('sideNumber'),
+                    is_home_team=is_home,
+                    order_of_play=team_data.get('sideNumber'),
+                    team_position='home' if is_home else 'away'
+                )
+                session.merge(team_match)
+
+            # Process and store web links
+            for link_data in match_data.get('webLinks', []):
+                web_link = WebLink(
+                    match_id=match.id,
+                    name=link_data['name'],
+                    url=link_data['url'],
+                    typename=link_data.get('__typename')
+                )
+                session.merge(web_link)
+
+            session.commit()
+
+        except Exception as e:
+            print(f"Error storing match: {e}")
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def store_team_roster(self, school_id: str, team_id: str, season_id: str):
         """Store roster information for a team"""
