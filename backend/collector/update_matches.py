@@ -797,23 +797,45 @@ class MatchUpdatesService:
                 ).first()
                 
                 if existing_home_team:
-                    # Only update fields that are provided in the API data and not None
+                    # Log the existing values before update
+                    logging.info(f"TEAM BEFORE UPDATE - ID: {existing_home_team.id}, Name: {existing_home_team.name}")
+                    logging.info(f"  Current values - Conference: '{existing_home_team.conference}', Region: '{existing_home_team.region}', Division: '{existing_home_team.division}'")
+                    
+                    # Log the incoming values from the API
+                    logging.info(f"  API values - Conference: '{match_data['homeTeam'].get('conference')}', Region: '{match_data['homeTeam'].get('region')}', Division: '{match_data['homeTeam'].get('division')}'")
+                    
+                    # Only update name which should always be present
                     existing_home_team.name = match_data['homeTeam']['name']
                     
-                    if match_data['homeTeam'].get('abbreviation') is not None:
+                    # Log evaluation results for each field
+                    if match_data['homeTeam'].get('abbreviation'):
                         existing_home_team.abbreviation = match_data['homeTeam']['abbreviation']
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: abbreviation value '{match_data['homeTeam'].get('abbreviation')}' evaluates to False")
                     
-                    # Only update division, conference, region if provided and not None
-                    if match_data['homeTeam'].get('division') is not None:
+                    if match_data['homeTeam'].get('division'):
                         existing_home_team.division = match_data['homeTeam']['division']
-                    if match_data['homeTeam'].get('conference') is not None:
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: division value '{match_data['homeTeam'].get('division')}' evaluates to False")
+                    
+                    if match_data['homeTeam'].get('conference'):
                         existing_home_team.conference = match_data['homeTeam']['conference']
-                    if match_data['homeTeam'].get('region') is not None:
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: conference value '{match_data['homeTeam'].get('conference')}' evaluates to False")
+                    
+                    if match_data['homeTeam'].get('region'):
                         existing_home_team.region = match_data['homeTeam']['region']
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: region value '{match_data['homeTeam'].get('region')}' evaluates to False")
                         
+                    # Always update gender
                     existing_home_team.gender = match_data['gender']
                     session.merge(existing_home_team)
                     home_team_id = existing_home_team.id
+                    
+                    # Log the values after update for verification
+                    logging.info(f"TEAM AFTER UPDATE - ID: {existing_home_team.id}, Name: {existing_home_team.name}")
+                    logging.info(f"  Updated values - Conference: '{existing_home_team.conference}', Region: '{existing_home_team.region}', Division: '{existing_home_team.division}'")
                 else:
                     # Create new team if it doesn't exist
                     home_team = Team(
@@ -826,6 +848,8 @@ class MatchUpdatesService:
                         typename=match_data['homeTeam'].get('__typename'),
                         gender=match_data['gender']
                     )
+                    logging.info(f"CREATING NEW TEAM - ID: {home_team.id}, Name: {home_team.name}")
+                    logging.info(f"  Initial values - Conference: '{home_team.conference}', Region: '{home_team.region}', Division: '{home_team.division}'")
                     session.merge(home_team)
                     home_team_id = home_team.id
             else:
@@ -837,23 +861,45 @@ class MatchUpdatesService:
                 ).first()
                 
                 if existing_home_team:
-                    # Only update fields that are provided
+                    # Log the existing values before update
+                    logging.info(f"TEAM BEFORE UPDATE (from teams) - ID: {existing_home_team.id}, Name: {existing_home_team.name}")
+                    logging.info(f"  Current values - Conference: '{existing_home_team.conference}', Region: '{existing_home_team.region}', Division: '{existing_home_team.division}'")
+                    
+                    # Log the incoming values from the API
+                    logging.info(f"  API values - Conference: '{home_team_data.get('conference')}', Region: '{home_team_data.get('region')}', Division: '{home_team_data.get('division')}'")
+                    
+                    # Only update name which should always be present
                     existing_home_team.name = home_team_data['name']
                     
-                    if home_team_data.get('abbreviation') is not None:
+                    # Log evaluation results for each field
+                    if home_team_data.get('abbreviation'):
                         existing_home_team.abbreviation = home_team_data['abbreviation']
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: abbreviation value '{home_team_data.get('abbreviation')}' evaluates to False")
                     
-                    # Only update division, conference, region if provided and not None
-                    if home_team_data.get('division') is not None:
+                    if home_team_data.get('division'):
                         existing_home_team.division = home_team_data['division']
-                    if home_team_data.get('conference') is not None:
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: division value '{home_team_data.get('division')}' evaluates to False")
+                    
+                    if home_team_data.get('conference'):
                         existing_home_team.conference = home_team_data['conference']
-                    if home_team_data.get('region') is not None:
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: conference value '{home_team_data.get('conference')}' evaluates to False")
+                    
+                    if home_team_data.get('region'):
                         existing_home_team.region = home_team_data['region']
+                    else:
+                        logging.warning(f"  SKIPPED UPDATE - Team {existing_home_team.id}: region value '{home_team_data.get('region')}' evaluates to False")
                         
+                    # Always update gender
                     existing_home_team.gender = match_data['gender']
                     session.merge(existing_home_team)
                     home_team_id = existing_home_team.id
+                    
+                    # Log the values after update for verification
+                    logging.info(f"TEAM AFTER UPDATE - ID: {existing_home_team.id}, Name: {existing_home_team.name}")
+                    logging.info(f"  Updated values - Conference: '{existing_home_team.conference}', Region: '{existing_home_team.region}', Division: '{existing_home_team.division}'")
                 else:
                     home_team = Team(
                         id=home_team_data['id'],
@@ -865,6 +911,8 @@ class MatchUpdatesService:
                         typename=home_team_data.get('__typename'),
                         gender=match_data['gender']
                     )
+                    logging.info(f"CREATING NEW TEAM (from teams) - ID: {home_team.id}, Name: {home_team.name}")
+                    logging.info(f"  Initial values - Conference: '{home_team.conference}', Region: '{home_team.region}', Division: '{home_team.division}'")
                     session.merge(home_team)
                     home_team_id = home_team.id
                 
@@ -884,23 +932,45 @@ class MatchUpdatesService:
                     ).first()
                     
                     if existing_away_team:
-                        # Only update fields that are provided
+                        # Log the existing values before update
+                        logging.info(f"AWAY TEAM BEFORE UPDATE - ID: {existing_away_team.id}, Name: {existing_away_team.name}")
+                        logging.info(f"  Current values - Conference: '{existing_away_team.conference}', Region: '{existing_away_team.region}', Division: '{existing_away_team.division}'")
+                        
+                        # Log the incoming values from the API
+                        logging.info(f"  API values - Conference: '{away_team_data.get('conference')}', Region: '{away_team_data.get('region')}', Division: '{away_team_data.get('division')}'")
+                        
+                        # Only update name which should always be present
                         existing_away_team.name = away_team_data['name']
                         
-                        if away_team_data.get('abbreviation') is not None:
+                        # Log evaluation results for each field
+                        if away_team_data.get('abbreviation'):
                             existing_away_team.abbreviation = away_team_data['abbreviation']
+                        else:
+                            logging.warning(f"  SKIPPED UPDATE - Team {existing_away_team.id}: abbreviation value '{away_team_data.get('abbreviation')}' evaluates to False")
                         
-                        # Only update division, conference, region if provided and not None
-                        if away_team_data.get('division') is not None:
+                        if away_team_data.get('division'):
                             existing_away_team.division = away_team_data['division']
-                        if away_team_data.get('conference') is not None:
+                        else:
+                            logging.warning(f"  SKIPPED UPDATE - Team {existing_away_team.id}: division value '{away_team_data.get('division')}' evaluates to False")
+                        
+                        if away_team_data.get('conference'):
                             existing_away_team.conference = away_team_data['conference']
-                        if away_team_data.get('region') is not None:
+                        else:
+                            logging.warning(f"  SKIPPED UPDATE - Team {existing_away_team.id}: conference value '{away_team_data.get('conference')}' evaluates to False")
+                        
+                        if away_team_data.get('region'):
                             existing_away_team.region = away_team_data['region']
+                        else:
+                            logging.warning(f"  SKIPPED UPDATE - Team {existing_away_team.id}: region value '{away_team_data.get('region')}' evaluates to False")
                             
+                        # Always update gender
                         existing_away_team.gender = match_data['gender']
                         session.merge(existing_away_team)
                         away_team_id = existing_away_team.id
+                        
+                        # Log the values after update for verification
+                        logging.info(f"AWAY TEAM AFTER UPDATE - ID: {existing_away_team.id}, Name: {existing_away_team.name}")
+                        logging.info(f"  Updated values - Conference: '{existing_away_team.conference}', Region: '{existing_away_team.region}', Division: '{existing_away_team.division}'")
                     else:
                         away_team = Team(
                             id=away_team_data['id'],
@@ -912,6 +982,8 @@ class MatchUpdatesService:
                             typename=away_team_data.get('__typename'),
                             gender=match_data['gender']
                         )
+                        logging.info(f"CREATING NEW AWAY TEAM - ID: {away_team.id}, Name: {away_team.name}")
+                        logging.info(f"  Initial values - Conference: '{away_team.conference}', Region: '{away_team.region}', Division: '{away_team.division}'")
                         session.merge(away_team)
                         away_team_id = away_team.id
             
@@ -973,9 +1045,10 @@ class MatchUpdatesService:
                 session.merge(web_link)
 
             session.commit()
+            logging.info(f"Successfully stored match {match_data['id']}")
 
         except Exception as e:
-            print(f"Error storing match: {e}")
+            logging.error(f"Error storing match: {e}")
             session.rollback()
             raise
         finally:
