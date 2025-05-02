@@ -49,7 +49,7 @@ def get_latest_team_rankings(
     if not latest_list:
         raise HTTPException(status_code=404, detail="No team ranking list found")
         
-    return service.get_team_rankings(ranking_id=latest_list.id, limit=limit)
+    return service.get_team_rankings(ranking_id=latest_list['id'], limit=limit)
 
 @router.get("/teams/{team_id}/history")
 def get_team_ranking_history(
@@ -138,26 +138,6 @@ def get_doubles_ranking_lists(
         match_format="DOUBLES",
         limit=limit
     )
-
-@router.get("/doubles/latest")
-def get_latest_doubles_rankings(
-    division_type: str = "DIV1",
-    gender: str = "M",
-    limit: int = 25,
-    db: Session = Depends(get_db)
-):
-    """Get the latest doubles rankings for the specified division and gender"""
-    service = RankingService(db)
-    latest_list = service.get_latest_player_ranking_list(
-        division_type=division_type, 
-        gender=gender,
-        match_format="DOUBLES"
-    )
-    
-    if not latest_list:
-        raise HTTPException(status_code=404, detail="No doubles ranking list found")
-        
-    return service.get_player_rankings(ranking_id=latest_list.id, limit=limit)
 
 @router.get("/doubles/players/{player_id}/history")
 def get_player_doubles_history(
