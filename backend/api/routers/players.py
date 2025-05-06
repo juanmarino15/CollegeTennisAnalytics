@@ -5,8 +5,7 @@ from typing import List, Optional
 from api.services.player_service import PlayerService
 from api.schemas.player import PlayerResponse
 from api.database import get_db
-from api.schemas.player import PlayerTeamInfo, PlayerStatsInfo, PlayerPositions, PlayerMatchResult
-
+from api.schemas.player import PlayerTeamInfo, PlayerStatsInfo, PlayerPositions, PlayerMatchResult,PlayerSearchResult
 
 router = APIRouter()
 
@@ -17,6 +16,32 @@ def get_players(
 ):
     service = PlayerService(db)
     return service.get_players(team_id=team_id)
+
+@router.get("/search", response_model=List[PlayerSearchResult])
+def search_players(
+    query: Optional[str] = None,
+    gender: Optional[str] = None,
+    season_name: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Search for players across all teams and seasons without artificial limits"""
+    print(f"DEBUG: Route hit with params: query={query}, gender={gender}, season_name={season_name}")
+    service = PlayerService(db)
+    try:
+        result = service.search_all_players(query, gender, season_name)
+        print(f"DEBUG: Route returned {len(result)} results")
+        return result
+    except Exception as e:
+        print(f"ERROR: Exception in search_players route: {str(e)}")
+        raise
+    
+@router.get("/view-test")
+def view_test(db: Session = Depends(get_db)):
+    try:
+        result = db.execute(text("SELECT COUNT(*) FROM player_search_view")).scalar()
+        return {"count": result}
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.get("/{player_id}", response_model=PlayerResponse)
 def get_player(player_id: str, db: Session = Depends(get_db)):
@@ -76,7 +101,6 @@ def get_player_positions(
     positions = service.get_player_positions(player_id, season=season)
     return positions
 
-# Optionally enhance the existing matches endpoint if you want more detailed info
 @router.get("/{player_id}/match-results", response_model=List[PlayerMatchResult])
 def get_player_match_results(
     player_id: str,
@@ -86,3 +110,4 @@ def get_player_match_results(
     """Enhanced version of match results with more details"""
     service = PlayerService(db)
     return service.get_player_match_results(player_id, season=season)
+

@@ -379,3 +379,23 @@ class DoublesRanking(Base):
     team = relationship("Team")
     player1 = relationship("Player", foreign_keys=[player1_id])
     player2 = relationship("Player", foreign_keys=[player2_id])
+
+class PlayerSearchView(Base):
+    __tablename__ = 'player_search_view'
+    
+    person_id = Column(String, primary_key=True)
+    tennis_id = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
+    avatar_url = Column(String)
+    team_id = Column(String)
+    team_name = Column(String)
+    gender = Column(String)
+    conference = Column(String)
+    division = Column(String)
+    season_name = Column(String)
+    season_id = Column(String)
+    school_name = Column(String)
+    school_id = Column(String)
+    wtn_singles = Column(Float)
+    wtn_doubles = Column(Float)

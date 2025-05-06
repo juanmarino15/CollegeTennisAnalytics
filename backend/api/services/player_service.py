@@ -1,11 +1,8 @@
 from sqlalchemy.orm import Session
-from models import Player, PlayerSeason, PlayerRoster, PlayerWTN, PlayerMatch, PlayerMatchParticipant,Team,MatchLineup,SchoolInfo,Season,Match
+from models import Player, PlayerSeason, PlayerRoster, PlayerWTN, PlayerMatch, PlayerMatchParticipant,Team,MatchLineup,SchoolInfo,Season,Match,PlayerSearchView
 from typing import Optional, List
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from datetime import datetime
-
-
-
 
 class PlayerService:
     def __init__(self, db: Session):
@@ -534,3 +531,57 @@ class PlayerService:
         
         print(f"Returning {len(results)} match results")
         return results
+    
+    def search_all_players(self, query: str = None, gender: str = None, season_name: str = None):
+        """Search for players using raw SQL to query the player_search_view"""
+        print(f"DEBUG: Service method called with params: query={query}, gender={gender}, season_name={season_name}")
+        
+        try:
+            # Build the SQL query
+            sql = "SELECT * FROM player_search_view WHERE 1=1"
+            params = {}
+            
+            # Apply text search filter if provided
+            if query and len(query) >= 2:
+                sql += """ AND (
+                    LOWER(first_name) LIKE :search_term OR
+                    LOWER(last_name) LIKE :search_term OR
+                    LOWER(team_name) LIKE :search_term OR
+                    LOWER(school_name) LIKE :search_term
+                )"""
+                params['search_term'] = f"%{query.lower()}%"
+            
+            # Apply gender filter if provided
+            if gender:
+                sql += " AND UPPER(gender) = :gender"
+                params['gender'] = gender.upper()
+            
+            # Apply season filter if provided
+            if season_name:
+                sql += " AND season_name = :season_name"
+                params['season_name'] = season_name
+            
+            print(f"DEBUG: Executing SQL: {sql}")
+            print(f"DEBUG: With params: {params}")
+            
+            # Execute raw SQL query
+            result = self.db.execute(text(sql), params).fetchall()
+            
+            print(f"DEBUG: Query returned {len(result)} rows")
+            
+            # Process results
+            player_results = []
+            for row in result:
+                # Convert SQLAlchemy Row to dict
+                row_dict = dict(row._mapping)
+                player_results.append(row_dict)
+            
+            print(f"DEBUG: Returning {len(player_results)} processed results")
+            return player_results
+            
+        except Exception as e:
+            print(f"ERROR: Exception in search_all_players: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            raise
+    

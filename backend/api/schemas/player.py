@@ -79,3 +79,21 @@ class PlayerMatchResult(BaseSchema):
     partner_name: Optional[str] = None
     opponent_name1: str
     opponent_name2: Optional[str] = None
+
+class PlayerSearchResult(BaseSchema):
+    person_id: str
+    tennis_id: Optional[str] = None
+    first_name: str
+    last_name: str
+    avatar_url: Optional[str] = None
+    team_id: Optional[str] = None
+    team_name: Optional[str] = None
+    gender: Optional[str] = None
+    conference: Optional[str] = None
+    division: Optional[str] = None
+    season_name: Optional[str] = None
+    season_id: Optional[str] = None
+    school_name: Optional[str] = None
+    school_id: Optional[str] = None
+    wtn_singles: Optional[float] = None
+    wtn_doubles: Optional[float] = None
