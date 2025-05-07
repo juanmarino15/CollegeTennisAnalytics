@@ -6,6 +6,8 @@ from api.services.player_service import PlayerService
 from api.schemas.player import PlayerResponse
 from api.database import get_db
 from api.schemas.player import PlayerTeamInfo, PlayerStatsInfo, PlayerPositions, PlayerMatchResult,PlayerSearchResult
+from models.models import Season
+
 
 router = APIRouter()
 
@@ -66,7 +68,7 @@ def get_player_matches(player_id: str, db: Session = Depends(get_db)):
     service = PlayerService(db)
     return service.get_player_matches(player_id)    
 
-# new
+
 @router.get("/{player_id}/team", response_model=PlayerTeamInfo)
 def get_player_team(
     player_id: str,
@@ -74,6 +76,30 @@ def get_player_team(
     db: Session = Depends(get_db)
 ):
     service = PlayerService(db)
+    
+    # If no season is provided, get the active season from the database
+    if not season:
+        # First try to get the active season from the database
+        active_season = db.query(Season).filter(Season.status == 'ACTIVE').first()
+        
+        if active_season:
+            # Use the active season
+            season = active_season.name
+            print(f"Using active season from database: {season}")
+        else:
+            # Fallback to determining season based on current date
+            from datetime import datetime
+            current_date = datetime.now()
+            current_year = current_date.year
+            current_month = current_date.month
+            
+            # If month is between January and July, we're in the second half of the academic year
+            if 1 <= current_month <= 7:
+                season = str(current_year - 1)
+            else:
+                season = str(current_year)
+            print(f"No active season found, using calculated season: {season}")
+    
     team = service.get_player_team(player_id, season=season)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found for player")

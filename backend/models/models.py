@@ -1,4 +1,4 @@
-# src/models.py
+# models/models.py
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, LargeBinary, ForeignKeyConstraint,Date
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime,date
