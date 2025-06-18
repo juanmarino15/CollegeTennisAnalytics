@@ -117,7 +117,8 @@ class RankingService:
             PlayerRankingList, PlayerRanking.ranking_list_id == PlayerRankingList.id
         ).filter(
             PlayerRanking.player_id == player_id,
-            PlayerRankingList.match_format == match_format
+            PlayerRankingList.match_format == match_format,
+            PlayerRankingList.publish_date.isnot(None)  # ADD THIS LINE
         ).order_by(desc(PlayerRankingList.publish_date)).limit(limit).all()
         
         result = []
