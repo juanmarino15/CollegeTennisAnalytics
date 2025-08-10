@@ -1,0 +1,39 @@
+name: Tennis Player Tournament Collector
+
+on:
+  workflow_dispatch: # Allow manual triggering
+  schedule:
+    - cron: "0 6 * * *" # Run daily at 6:00 AM UTC
+
+jobs:
+  collect-tournament-players:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily tournament players collector
+        working-directory: ./backend
+        run: |
+          python scripts/update_tournament_players.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run extended tournament players collector (weekly on Sunday)
+        if: github.event.schedule == '0 6 * * 0' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'extended')
+        working-directory: ./backend
+        run: |
+          python scripts/update_tournament_players.py --extended
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

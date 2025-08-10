@@ -1,0 +1,31 @@
+name: Tennis Tournament Collector
+
+on:
+  workflow_dispatch: # Allow manual triggering
+  schedule:
+    - cron: "0 2 * * 0" # Run at 2:00 UTC on Sunday
+
+jobs:
+  collect-tournaments:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tournament collector
+        working-directory: ./backend
+        run: |
+          python scripts/update_tournaments.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

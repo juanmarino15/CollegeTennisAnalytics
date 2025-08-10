@@ -1,5 +1,5 @@
 # models/models.py
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, LargeBinary, ForeignKeyConstraint,Date
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Float, LargeBinary, ForeignKeyConstraint,Date,JSON
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime,date
 from uuid import uuid4
@@ -399,3 +399,126 @@ class PlayerSearchView(Base):
     school_id = Column(String)
     wtn_singles = Column(Float)
     wtn_doubles = Column(Float)
+
+
+####Tournaments#########
+
+class Tournament(Base):
+    __tablename__ = 'tournaments'
+    
+    tournament_id = Column(String, primary_key=True)  # Tournament ID
+    identification_code = Column(String)  # e.g., "25-79395"
+    name = Column(String)  # e.g., "CCIW Fall Invite"
+    image = Column(String, nullable=True)
+    is_cancelled = Column(Boolean, default=False)
+    cancelled_at = Column(DateTime, nullable=True)
+    start_date_time = Column(DateTime)
+    end_date_time = Column(DateTime)
+    time_zone = Column(String)
+    time_zone_start_date_time = Column(DateTime)
+    time_zone_end_date_time = Column(DateTime)
+    url = Column(String, nullable=True)
+    root_provider_id = Column(String)
+    
+    # Location information
+    location_id = Column(String)
+    location_name = Column(String)  # e.g., "Carthage College"
+    primary_location_town = Column(String)  # e.g., "Kenosha"
+    primary_location_county = Column(String)  # e.g., "WI"
+    primary_location_address1 = Column(String, nullable=True)
+    primary_location_address2 = Column(String, nullable=True)
+    primary_location_address3 = Column(String, nullable=True)
+    primary_location_postcode = Column(String, nullable=True)
+    geo_latitude = Column(Float, default=0)
+    geo_longitude = Column(Float, default=0)
+    
+    # Level information
+    level_id = Column(String)
+    level_name = Column(String)  # e.g., "DII, DIII, NAIA & JUCO (33-64 players)"
+    level_branding = Column(String, nullable=True)
+    
+    # Organization information
+    organization_id = Column(String)
+    organization_name = Column(String)  # e.g., "Carthage College (M)"
+    organization_conference = Column(String)  # e.g., "College Conference of Illinois and Wisconsin"
+    organization_division = Column(String)  # e.g., "DIV_III"
+    organization_url_segment = Column(String)
+    organization_parent_region_id = Column(String, nullable=True)
+    organization_region_id = Column(String, nullable=True)
+    
+    # Registration information
+    entries_open_date_time = Column(DateTime, nullable=True)
+    entries_close_date_time = Column(DateTime, nullable=True)
+    seconds_until_entries_close = Column(Float, nullable=True)
+    seconds_until_entries_open = Column(Float, nullable=True)
+    registration_time_zone = Column(String, nullable=True)
+    
+    # Classification
+    is_dual_match = Column(Boolean, default=False)  # True for team vs team matches, False for tournaments
+    tournament_type = Column(String)  # 'DUAL_MATCH' or 'TOURNAMENT'
+
+    gender = Column(String)
+    event_types = Column(String)
+    level_category = Column(String) 
+    registration_status = Column(String)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class TournamentEvent(Base):
+    __tablename__ = 'tournament_events'
+    
+    event_id = Column(String, primary_key=True)  # Event ID from API
+    tournament_id = Column(String, ForeignKey('tournaments.tournament_id'))
+    gender = Column(String)  # 'boys', 'girls', 'mixed'
+    event_type = Column(String)  # 'singles', 'doubles'
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    tournament = relationship("Tournament", back_populates="events")
+
+Tournament.events = relationship("TournamentEvent", back_populates="tournament")
+
+class TournamentPlayer(Base):
+    __tablename__ = 'tournament_players'
+    
+    id = Column(String, primary_key=True)  # We'll create a unique ID from tournament_id + player_id
+    tournament_id = Column(String, ForeignKey('tournaments.tournament_id'))
+    
+    # Player information
+    player_id = Column(String)  # From playerId.value or playerCustomIds where key='personId'
+    first_name = Column(String)  # playerFirstName
+    last_name = Column(String)  # playerLastName
+    player_name = Column(String)  # playerName (full name)
+    gender = Column(String)  # playerGender
+    city = Column(String, nullable=True)  # playerCity
+    state = Column(String, nullable=True)  # playerState
+    
+    # Registration details from API
+    registration_date = Column(DateTime, nullable=True)  # registrationDate
+    selection_status = Column(String, nullable=True)  # selectionStatus ("SELECTED", etc.)
+    selection_index = Column(Integer, nullable=True)  # selectionIndex
+    
+    # Event participation - store which events they're in
+    events_participating = Column(String)  # Comma-separated: "singles", "doubles", "singles,doubles"
+    singles_event_id = Column(String, nullable=True)  # Singles event ID if participating
+    doubles_event_id = Column(String, nullable=True)  # Doubles event ID if participating
+    
+    # Player 2 information (for doubles - current player is player 1)
+    player2_id = Column(String, nullable=True)  # Player 2's player ID
+    player2_first_name = Column(String, nullable=True)
+    player2_last_name = Column(String, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    tournament = relationship("Tournament", back_populates="players")
+
+# Add this relationship to the Tournament model
+Tournament.players = relationship("TournamentPlayer", back_populates="tournament")
+    
