@@ -204,6 +204,7 @@ class PlayerMatchesCollector:
                     }
                     roundName
                     collectionPosition
+                    drawId
                 }
             }
         }"""
@@ -324,6 +325,10 @@ class PlayerMatchesCollector:
                     
                     if existing_match:
                         # print(f"Skipping duplicate match: {match_identifier}")
+                        if not existing_match.draw_id and match_item.get('drawId'):
+                            existing_match.draw_id = match_item.get('drawId', '').lower()
+                            session.commit()
+                            print(f"Updated existing match {existing_match.id} with draw_id: {existing_match.draw_id}")
                         skipped_count += 1
                         continue
                     
@@ -351,7 +356,9 @@ class PlayerMatchesCollector:
                         round_name=match_item.get('roundName'),
                         tournament_id=tournament_data.get('providerTournamentId', ''),
                         score_string=score_data.get('scoreString', ''),
-                        collection_position=match_item.get('collectionPosition')
+                        collection_position=match_item.get('collectionPosition'),
+                        draw_id=match_item.get('drawId', '').lower() if match_item.get('drawId') else None 
+
                     )
                     session.add(match)
                     session.flush()

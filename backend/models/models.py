@@ -180,7 +180,7 @@ class PlayerMatch(Base):
     __tablename__ = 'player_matches'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    match_identifier = Column(String, unique=True)  # Add this line
+    match_identifier = Column(String, unique=True) 
     winning_side = Column(String)  # "SIDE1" or "SIDE2"
     start_time = Column(DateTime)
     end_time = Column(DateTime)
@@ -190,7 +190,8 @@ class PlayerMatch(Base):
     round_name = Column(String)  # e.g., "R256", "R128"
     tournament_id = Column(String)  # providerTournamentId
     score_string = Column(String)  # e.g., "6-1 6-0"
-    collection_position = Column(Integer, nullable=True)  # Add this new field
+    collection_position = Column(Integer, nullable=True)
+    draw_id = Column(String, nullable=True)  
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -519,6 +520,72 @@ class TournamentPlayer(Base):
     # Relationship
     tournament = relationship("Tournament", back_populates="players")
 
-# Add this relationship to the Tournament model
 Tournament.players = relationship("TournamentPlayer", back_populates="tournament")
+
+class TournamentDraw(Base):
+    __tablename__ = 'tournament_draws'
+    
+    draw_id = Column(String, primary_key=True)  # drawId from API
+    tournament_id = Column(String, ForeignKey('tournaments.tournament_id'))
+    event_id = Column(String)  # eventId
+    
+    # Draw information for visualization
+    draw_name = Column(String)  # "Men's Singles", "Women's Doubles"
+    draw_type = Column(String)  # "SINGLE_ELIMINATION", "ROUND_ROBIN"
+    draw_size = Column(Integer)  # Number of players/teams in draw
+    event_type = Column(String)  # "SINGLES", "DOUBLES"
+    gender = Column(String)  # "MALE", "FEMALE", "MIXED"
+    
+    # Draw status
+    draw_completed = Column(Boolean, default=False)
+    draw_active = Column(Boolean, default=False)
+    
+    # Timestamps from API
+    updated_at_api = Column(DateTime)  # updatedAt from API
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    tournament = relationship("Tournament", back_populates="draws")
+    bracket_positions = relationship("TournamentBracketPosition", back_populates="draw")
+
+class TournamentBracketPosition(Base):
+    __tablename__ = 'tournament_bracket_positions'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    draw_id = Column(String, ForeignKey('tournament_draws.draw_id'))
+    
+    # Position in the bracket
+    draw_position = Column(Integer)  # 1, 2, 3, 4, etc.
+    
+    # Player/Team information
+    participant_id = Column(String)  # From API
+    participant_name = Column(String)  # "John Doe" or "John Doe / Jane Smith"
+    participant_type = Column(String)  # "INDIVIDUAL" or "PAIR"
+    
+    # Team affiliation
+    team_name = Column(String)  # "Stanford", "UCLA"
+    
+    # Seed information
+    seed_number = Column(Integer, nullable=True)  # 1, 2, 3, etc. (null if unseeded)
+    
+    # Match linking to existing system
+    player_match_id = Column(Integer, ForeignKey('player_matches.id'), nullable=True)
+    
+    # Position status
+    is_bye = Column(Boolean, default=False)  # True if this position gets a bye
+    is_winner = Column(Boolean, default=False)  # True if won this match
+    advanced_to_position = Column(Integer, nullable=True)  # Which position they advance to
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    draw = relationship("TournamentDraw", back_populates="bracket_positions")
+    player_match = relationship("PlayerMatch", foreign_keys=[player_match_id])
+
+Tournament.draws = relationship("TournamentDraw", back_populates="tournament")
     
