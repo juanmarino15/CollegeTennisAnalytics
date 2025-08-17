@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import matches, teams, players, schools,stats,seasons,rankings,tournaments
+from .routers import matches, teams, players, schools,stats,seasons,rankings,tournaments,tournament_draws
 from .database import engine, Base
 
 
@@ -31,6 +31,8 @@ app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
 app.include_router(seasons.router, prefix="/api/v1/seasons", tags=["seasons"]) 
 app.include_router(rankings.router, prefix="/api/v1/rankings", tags=["rankings"])
 app.include_router(tournaments.router, prefix="/api/v1/tournaments", tags=["tournaments"])
+app.include_router(tournament_draws.router, prefix="/api/v1/tournament-draws", tags=["tournament-draws"])
+
 
 
 
