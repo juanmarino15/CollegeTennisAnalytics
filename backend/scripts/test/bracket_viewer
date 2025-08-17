@@ -1,0 +1,370 @@
+#!/usr/bin/env python3
+"""
+Bracket Viewer - Display cached tournament brackets in readable format
+"""
+
+import json
+from typing import Dict, List, Any
+from sqlalchemy import create_engine, func
+from sqlalchemy.orm import sessionmaker
+from pathlib import Path
+import sys
+
+# Add the parent directory to the Python path
+current_dir = Path(__file__).resolve().parent
+parent_dir = current_dir.parent.parent
+sys.path.append(str(parent_dir))
+
+from bracket_cache_service_test import EnhancedBracketGenerator, TournamentBracketCache
+
+class BracketViewer:
+    def __init__(self, database_url: str):
+        """Initialize the bracket viewer"""
+        self.database_url = database_url
+        self.engine = create_engine(database_url)
+        self.Session = sessionmaker(bind=self.engine)
+        self.cache_service = EnhancedBracketGenerator(database_url)
+
+    def display_tournament_summary(self, tournament_id: str):
+        """Display summary of all draws in a tournament"""
+        session = self.Session()
+        
+        try:
+            cache_entries = session.query(TournamentBracketCache).filter(
+                func.lower(TournamentBracketCache.tournament_id) == tournament_id.lower()
+            ).all()
+            
+            print(f"\n{'='*80}")
+            print(f"TOURNAMENT SUMMARY: {tournament_id}")
+            print(f"{'='*80}")
+            print(f"Total draws: {len(cache_entries)}")
+            
+            for entry in cache_entries:
+                bracket_data = json.loads(entry.bracket_data)
+                draw_info = bracket_data.get('drawInfo', {})
+                
+                print(f"\n📋 Draw: {entry.draw_id}")
+                print(f"   Type: {draw_info.get('matchType', 'Unknown')}")
+                print(f"   Matches: {entry.match_count}")
+                print(f"   Participants: {entry.participant_count}")
+                print(f"   Rounds: {len(bracket_data.get('rounds', []))}")
+                print(f"   Completed: {'✅' if draw_info.get('isCompleted', False) else '⏳'}")
+                
+        finally:
+            session.close()
+
+    def display_draw_bracket(self, tournament_id: str, draw_id: str, show_details: bool = True):
+        """Display detailed bracket for a specific draw"""
+        cached_bracket = self.cache_service.get_cached_bracket(tournament_id, draw_id)
+        
+        if not cached_bracket:
+            # Try to generate it fresh if not cached
+            print(f"🔄 Generating fresh bracket for draw {draw_id}...")
+            cached_bracket = self.cache_service.generate_enhanced_bracket_data(tournament_id, draw_id)
+        
+        if not cached_bracket:
+            print(f"❌ No bracket found for tournament {tournament_id}, draw {draw_id}")
+            return
+        
+        if 'error' in cached_bracket:
+            print(f"❌ Error in bracket: {cached_bracket['error']}")
+            return
+        
+        print(f"\n{'='*100}")
+        print(f"ENHANCED BRACKET DETAILS: {draw_id}")
+        print(f"{'='*100}")
+        
+        draw_info = cached_bracket.get('drawInfo', {})
+        print(f"Tournament: {cached_bracket['tournamentId']}")
+        print(f"Draw ID: {cached_bracket['drawId']}")
+        print(f"Type: {draw_info.get('matchType', 'Unknown')}")
+        print(f"Draw Size: {cached_bracket.get('drawSize', 'Unknown')} positions")
+        print(f"Total Matches: {cached_bracket['totalMatches']}")
+        print(f"Total Participants: {cached_bracket['totalParticipants']}")
+        print(f"Completed: {'✅' if draw_info.get('isCompleted', False) else '⏳'}")
+        
+        # Display initial bracket positions if available
+        initial_positions = cached_bracket.get('initialPositions', {})
+        if initial_positions:
+            self.display_initial_positions(initial_positions, show_details)
+        
+        # Display rounds
+        rounds = cached_bracket.get('rounds', [])
+        print(f"\n🏆 TOURNAMENT PROGRESSION ({len(rounds)} rounds)")
+        print(f"{'='*100}")
+        
+        for round_data in rounds:
+            self.display_round(round_data, show_details)
+        
+        # Display player progression if requested
+        if show_details:
+            self.display_enhanced_player_progression(cached_bracket)
+
+    def display_initial_positions(self, initial_positions: Dict[int, List[Dict]], show_details: bool = True):
+        """Display the initial bracket seeding positions"""
+        if not initial_positions:
+            return
+            
+        print(f"\n📋 INITIAL BRACKET POSITIONS")
+        print(f"{'='*100}")
+        
+        positions_to_show = 16 if show_details else 8
+        shown_positions = 0
+        
+        for position in sorted(initial_positions.keys()):
+            # if shown_positions >= positions_to_show:
+            #     remaining = len(initial_positions) - shown_positions
+            #     # if remaining > 0:
+            #     #     print(f"   ... and {remaining} more positions")
+            #     # break
+                
+            participants = initial_positions[position]
+            for participant in participants:
+                team = f" ({participant['teamName']})" if participant.get('teamName') else ""
+                print(f"  Position {position:>2}: {participant['participantName']}{team}")
+                shown_positions += 1
+
+    def display_enhanced_player_progression(self, bracket_data: Dict[str, Any]):
+        """Display enhanced player progression including initial positions"""
+        player_progression = bracket_data.get('playerProgression', {})
+        
+        if not player_progression:
+            return
+        
+        print(f"\n👤 ENHANCED PLAYER PROGRESSION")
+        print(f"{'='*100}")
+        
+        # Sort players by how far they progressed, then by initial position
+        players_by_progression = []
+        for player_id, progression in player_progression.items():
+            matches = progression.get('matches', [])
+            initial_position = progression.get('initialPosition', 999)
+            
+            if matches:
+                # Find the latest round they played
+                latest_round = max(matches, key=lambda m: m.get('roundNumber', 0))
+                wins = sum(1 for m in matches if m.get('won', False))
+                
+                players_by_progression.append({
+                    'player': progression,
+                    'latest_round': latest_round.get('roundName', 'Unknown'),
+                    'round_number': latest_round.get('roundNumber', 0),
+                    'total_matches': len(matches),
+                    'wins': wins,
+                    'losses': len(matches) - wins,
+                    'initial_position': initial_position
+                })
+            else:
+                # Player didn't play any matches (early exit or bye)
+                players_by_progression.append({
+                    'player': progression,
+                    'latest_round': 'Did not play',
+                    'round_number': 0,
+                    'total_matches': 0,
+                    'wins': 0,
+                    'losses': 0,
+                    'initial_position': initial_position
+                })
+        
+        # Sort by round progression (furthest first), then by initial position
+        players_by_progression.sort(key=lambda x: (x['round_number'], -x['initial_position']), reverse=True)
+        
+        # Group by final round and show progression
+        current_round = None
+        shown_players = 0
+        max_players_to_show = 15
+        
+        for player_data in players_by_progression:
+            if shown_players >= max_players_to_show:
+                remaining = len(players_by_progression) - shown_players
+                print(f"\n   ... and {remaining} more players")
+                break
+                
+            player = player_data['player']
+            
+            if current_round != player_data['latest_round']:
+                current_round = player_data['latest_round']
+                print(f"\n🎯 {current_round}:")
+            
+            record = f"{player_data['wins']}-{player_data['losses']}"
+            initial_pos = f"#{player_data['initial_position']}"
+            team = f" ({player.get('teamName', 'Unknown Team')})"
+            
+            print(f"  • {initial_pos:>3} {player['playerName']}{team} - {record}")
+            
+            # Show their path through the tournament
+            if player_data['total_matches'] > 0:
+                path = []
+                for match in player['matches']:
+                    result = "W" if match.get('won') else "L"
+                    opponents = " & ".join(match.get('opponents', ['Unknown']))
+                    if len(opponents) > 30:  # Truncate long opponent names
+                        opponents = opponents[:27] + "..."
+                    path.append(f"{match.get('baseRound', 'R?')}({result} vs {opponents})")
+                
+                if path:
+                    print(f"      Path: {' → '.join(path)}")
+            
+            shown_players += 1
+
+    def display_round(self, round_data: Dict[str, Any], show_details: bool = True):
+        """Display matches in a specific round"""
+        round_name = round_data['roundName']
+        base_round = round_data.get('baseRound', round_name)
+        matches = round_data['matches']
+        
+        print(f"\n🎾 {round_name} ({base_round}) - {len(matches)} matches")
+        print(f"{'-'*80}")
+        
+        for i, match in enumerate(matches, 1):
+            status_icon = "✅" if match['status'] == 'COMPLETED' else "⏳"
+            winner_icon = "🏆" if match['winningSide'] else "vs"
+            
+            # Format participants
+            side1_names = self.format_participants(match['side1'])
+            side2_names = self.format_participants(match['side2'])
+            
+            # Determine winner formatting
+            if match['winningSide'] == 'SIDE1':
+                side1_display = f"🏆 {side1_names}"
+                side2_display = f"   {side2_names}"
+            elif match['winningSide'] == 'SIDE2':
+                side1_display = f"   {side1_names}"
+                side2_display = f"🏆 {side2_names}"
+            else:
+                side1_display = f"   {side1_names}"
+                side2_display = f"   {side2_names}"
+            
+            print(f"  Match {i}: {status_icon}")
+            print(f"    {side1_display}")
+            print(f"    {side2_display}")
+            
+            if match['score']:
+                print(f"    Score: {match['score']}")
+            
+            if show_details:
+                if match['startTime']:
+                    start_time = match['startTime'].split('T')[0]  # Just the date
+                    print(f"    Date: {start_time}")
+                print(f"    Status: {match['status']}")
+                print(f"    Match ID: {match['matchId']}")
+            
+            print()  # Empty line between matches
+
+    def format_participants(self, participants: List[Dict[str, Any]]) -> str:
+        """Format participant names for display"""
+        if not participants:
+            return "TBD"
+        
+        names = []
+        for p in participants:
+            name = p.get('name', 'Unknown')
+            if p.get('isWinner'):
+                names.append(name)
+            else:
+                names.append(name)
+        
+        return " / ".join(names) if len(names) > 1 else names[0]
+
+    def display_player_progression(self, bracket_data: Dict[str, Any]):
+        """Display individual player progression through the tournament"""
+        player_progression = bracket_data.get('playerProgression', {})
+        
+        if not player_progression:
+            return
+        
+        print(f"\n👤 PLAYER PROGRESSION")
+        print(f"{'='*100}")
+        
+        # Sort players by how far they progressed
+        players_by_progression = []
+        for player_id, progression in player_progression.items():
+            matches = progression.get('matches', [])
+            if matches:
+                # Find the latest round they played
+                latest_round = max(matches, key=lambda m: m.get('roundNumber', 0))
+                wins = sum(1 for m in matches if m.get('won', False))
+                
+                players_by_progression.append({
+                    'player': progression,
+                    'latest_round': latest_round.get('roundName', 'Unknown'),
+                    'round_number': latest_round.get('roundNumber', 0),
+                    'total_matches': len(matches),
+                    'wins': wins,
+                    'losses': len(matches) - wins
+                })
+        
+        # Sort by round progression (furthest first)
+        players_by_progression.sort(key=lambda x: x['round_number'], reverse=True)
+        
+        # Group by final round
+        current_round = None
+        for player_data in players_by_progression[:10]:  # Show top 10
+            player = player_data['player']
+            
+            if current_round != player_data['latest_round']:
+                current_round = player_data['latest_round']
+                print(f"\n🎯 Reached {current_round}:")
+            
+            record = f"{player_data['wins']}-{player_data['losses']}"
+            print(f"  • {player['playerName']} ({record})")
+            
+            # Show their path
+            if len(player['matches']) > 1:
+                path = []
+                for match in player['matches']:
+                    result = "W" if match.get('won') else "L"
+                    opponents = " & ".join(match.get('opponents', ['Unknown']))
+                    path.append(f"{match.get('baseRound', 'R?')}({result} vs {opponents})")
+                
+                print(f"    Path: {' → '.join(path)}")
+
+    def display_specific_draws(self, tournament_id: str, draw_ids: List[str] = None, show_details: bool = True):
+        """Display specific draws or all draws if none specified"""
+        session = self.Session()
+        
+        try:
+            if draw_ids:
+                # Display specific draws
+                for draw_id in draw_ids:
+                    self.display_draw_bracket(tournament_id, draw_id, show_details)
+            else:
+                # Display all draws
+                cache_entries = session.query(TournamentBracketCache).filter(
+                    func.lower(TournamentBracketCache.tournament_id) == tournament_id.lower()
+                ).all()
+                
+                for entry in cache_entries:
+                    self.display_draw_bracket(tournament_id, entry.draw_id, show_details)
+                    
+        finally:
+            session.close()
+
+def main():
+    """Main function for testing the bracket viewer"""
+    database_url = "postgresql://dev-college-analyticis-db:AVNS_hhOdMVbRJmDYoEn6Q9z@app-1cef99df-53b2-41c6-8604-aa6d278bdd7d-do-user-18766687-0.j.db.ondigitalocean.com:25060/dev-college-analyticis-db?sslmode=require"
+    
+    viewer = BracketViewer(database_url)
+    tournament_id = "92bc5ea2-b793-4e41-8252-9838a350538e"
+    
+    # Display tournament summary
+    viewer.display_tournament_summary(tournament_id)
+    
+    # Display all draws (with details)
+    print(f"\n{'='*120}")
+    print(f"DETAILED BRACKET VIEW")
+    print(f"{'='*120}")
+    
+    # Show first few draws in detail
+    interesting_draws = [
+        "6fea96f0-6b5c-4eb9-b337-628174a48c8f",  # 21 matches - biggest singles
+        "ae9c0c19-f210-436a-bff5-80bcc31d89d7",  # 15 matches - good sized singles
+        "95802766-ab6a-40af-9e33-f399fa4c1c83",  # 7 matches - doubles
+    ]
+    
+    for draw_id in interesting_draws:
+        viewer.display_draw_bracket(tournament_id, draw_id, show_details=True)
+        print("\n" + "="*120 + "\n")
+
+if __name__ == "__main__":
+    main()

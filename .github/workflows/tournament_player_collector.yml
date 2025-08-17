@@ -1,12 +1,21 @@
-name: Tennis Player Tournament Collector
+name: Tennis Tournament Data Collectors
 
 on:
   workflow_dispatch: # Allow manual triggering
+    inputs:
+      mode:
+        description: "Collection mode"
+        required: false
+        default: "daily"
+        type: choice
+        options:
+          - daily
+          - extended
   schedule:
     - cron: "0 6 * * *" # Run daily at 6:00 AM UTC
 
 jobs:
-  collect-tournament-players:
+  collect-tournament-data:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Tournament Players Collection (existing)
       - name: Run daily tournament players collector
         working-directory: ./backend
         run: |
@@ -30,10 +40,33 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Run extended tournament players collector (weekly on Sunday)
-        if: github.event.schedule == '0 6 * * 0' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'extended')
+      # Tournament Draw Collection (new)
+      - name: Run daily tournament draw collector
+        working-directory: ./backend
+        run: |
+          python scripts/update_tournament_draws.py
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Extended/Weekly Collections (run on Sundays or manual trigger)
+      - name: Run extended tournament players collector (weekly)
+        if: github.event.schedule == '0 6 * * 0' || github.event.inputs.mode == 'extended'
         working-directory: ./backend
         run: |
           python scripts/update_tournament_players.py --extended
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run extended tournament draw collection (weekly)
+        if: github.event.schedule == '0 6 * * 0' || github.event.inputs.mode == 'extended'
+        working-directory: ./backend
+        run: |
+          python scripts/update_tournament_draws.py --extended
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Log completion
+      - name: Log completion
+        run: |
+          echo "Tournament data collection completed at $(date)"
+          echo "Mode: ${{ github.event.inputs.mode || 'daily' }}"
