@@ -11,3 +11,4 @@ alembic==1.12.1
 requests==2.31.0
 pytz==2022.1
 python-multipart==0.0.6
+pydantic>=2.0.0
