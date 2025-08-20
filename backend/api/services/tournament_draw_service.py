@@ -24,11 +24,11 @@ class TournamentDrawService:
         sort_by: str = "start_date_time",
         sort_order: str = "desc"
     ) -> TournamentSearchResponse:
-        """Get paginated list of tournaments with draw counts and event tags from tournament_events"""
+        """Get paginated list of tournaments with draw counts from tournament_draws"""
         
         query = self.db.query(Tournament)
         
-        # Apply filters
+        # Apply filters (same as before)
         if filters:
             if filters.date_from:
                 query = query.filter(Tournament.start_date_time >= filters.date_from)
@@ -70,16 +70,19 @@ class TournamentDrawService:
         offset = (page - 1) * page_size
         tournaments = query.offset(offset).limit(page_size).all()
         
-        # Build response with draw and event information
+        # Build response with draw information from tournament_draws table
         tournament_items = []
         for tournament in tournaments:
-            # Get draw count from tournament_draws table (case-insensitive)
-            draws_count = self.db.query(func.count(TournamentDraw.draw_id)).filter(
+            # Use case-insensitive comparison for tournament IDs
+            draws = self.db.query(TournamentDraw).filter(
                 func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
-            ).scalar() or 0
+            ).all()
             
-            # Get event tags from tournament_events table
-            events = self._get_tournament_event_tags(tournament.tournament_id)
+            # Count total draws
+            draws_count = len(draws)
+            
+            # NEW LOGIC: Create aggregated event descriptions
+            events = self._aggregate_tournament_events(draws)
             
             tournament_items.append(TournamentListItem(
                 tournament_id=tournament.tournament_id,
@@ -91,7 +94,7 @@ class TournamentDrawService:
                 organization_division=tournament.organization_division,
                 tournament_type=tournament.tournament_type,
                 draws_count=draws_count,
-                events=events
+                events=events  # Simplified event list
             ))
         
         return TournamentSearchResponse(
@@ -103,45 +106,6 @@ class TournamentDrawService:
             has_previous=page > 1
         )
     
-    def _get_tournament_event_tags(self, tournament_id: str) -> List[str]:
-        """
-        Get aggregated event tags from tournament_events table
-        Returns tags like ["Men's and Women's", "Singles and Doubles"]
-        """
-        # Query tournament_events for this tournament (case-insensitive)
-        events = self.db.query(TournamentEvent).filter(
-            func.upper(TournamentEvent.tournament_id) == func.upper(tournament_id)
-        ).all()
-        
-        if not events:
-            return []
-        
-        # Check what genders and event types exist
-        has_boys = any(e.gender == 'boys' for e in events)
-        has_girls = any(e.gender == 'girls' for e in events)
-        has_singles = any(e.event_type == 'singles' for e in events)
-        has_doubles = any(e.event_type == 'doubles' for e in events)
-        
-        tags = []
-        
-        # Add gender tag (convert boys/girls to Men's/Women's for display)
-        if has_boys and has_girls:
-            tags.append("Men's and Women's")
-        elif has_boys:
-            tags.append("Men's")
-        elif has_girls:
-            tags.append("Women's")
-        
-        # Add event type tag
-        if has_singles and has_doubles:
-            tags.append("Singles and Doubles")
-        elif has_singles:
-            tags.append("Singles")
-        elif has_doubles:
-            tags.append("Doubles")
-        
-        return tags   
-    
     def get_tournament_with_draws(self, tournament_id: str) -> Optional[TournamentWithDraws]:
         """Get tournament details with all its draws"""
         
@@ -152,7 +116,7 @@ class TournamentDrawService:
         if not tournament:
             return None
         
-        # Get draws (case-insensitive)
+        # CRITICAL FIX: Use case-insensitive comparison
         draws = self.db.query(TournamentDraw).filter(
             func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
         ).order_by(TournamentDraw.gender, TournamentDraw.event_type).all()
@@ -373,12 +337,12 @@ class TournamentDrawService:
         )
 
     def search_tournaments(
-        self, 
-        query: Optional[str] = None,
-        filters: Optional[TournamentSearchFilters] = None,
-        page: int = 1,
-        page_size: int = 20
-    ) -> TournamentSearchResponse:
+    self, 
+    query: Optional[str] = None,
+    filters: Optional[TournamentSearchFilters] = None,
+    page: int = 1,
+    page_size: int = 20
+) -> TournamentSearchResponse:
         """Search tournaments by name, location, or organization"""
         
         db_query = self.db.query(Tournament)
@@ -400,7 +364,7 @@ class TournamentDrawService:
                 db_query = db_query.filter(Tournament.end_date_time <= filters.date_to)
             if filters.tournament_type:
                 db_query = db_query.filter(Tournament.tournament_type == filters.tournament_type)
-            if filters.division:
+            if filters.division:  # Add division filter
                 db_query = db_query.filter(Tournament.organization_division == filters.division)
             if filters.status:
                 now = datetime.utcnow()
@@ -423,16 +387,45 @@ class TournamentDrawService:
         offset = (page - 1) * page_size
         tournaments = db_query.order_by(desc(Tournament.start_date_time)).offset(offset).limit(page_size).all()
         
-        # Build response items
+        # Build response items with draws from tournament_draws table
         tournament_items = []
         for tournament in tournaments:
-            # Get draw count (case-insensitive)
-            draws_count = self.db.query(func.count(TournamentDraw.draw_id)).filter(
+            # CRITICAL FIX: Use case-insensitive comparison for tournament IDs
+            draws = self.db.query(TournamentDraw).filter(
                 func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
-            ).scalar() or 0
+            ).all()
             
-            # Get event tags from tournament_events
-            events = self._get_tournament_event_tags(tournament.tournament_id)
+            draws_count = len(draws)
+            
+            # Parse event types from draw names (more reliable than gender field)
+            event_set = set()
+            for draw in draws:
+                if draw.draw_name:
+                    draw_name = draw.draw_name.lower()
+                    
+                    # Determine gender from draw_name
+                    if 'women' in draw_name:
+                        gender_label = "Women's"
+                    elif 'men' in draw_name:
+                        gender_label = "Men's"
+                    else:
+                        # Fallback to gender field
+                        if draw.gender == 'FEMALE':
+                            gender_label = "Women's"
+                        elif draw.gender == 'MALE':
+                            gender_label = "Men's"
+                        else:
+                            gender_label = "Mixed"
+                    
+                    # Determine event type
+                    if 'singles' in draw_name or draw.event_type == 'SINGLES':
+                        event_type_label = "Singles"
+                    elif 'doubles' in draw_name or draw.event_type == 'DOUBLES':
+                        event_type_label = "Doubles"
+                    else:
+                        continue
+                    
+                    event_set.add(f"{gender_label} {event_type_label}")
             
             tournament_items.append(TournamentListItem(
                 tournament_id=tournament.tournament_id,
@@ -444,7 +437,7 @@ class TournamentDrawService:
                 organization_division=tournament.organization_division,
                 tournament_type=tournament.tournament_type,
                 draws_count=draws_count,
-                events=events
+                events=sorted(list(event_set))
             ))
         
         return TournamentSearchResponse(
