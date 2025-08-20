@@ -4,7 +4,7 @@ from sqlalchemy import and_, or_, desc, asc, func, text
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
-from models.models import Tournament, TournamentDraw, TournamentMatch
+from models.models import Tournament, TournamentDraw, TournamentMatch, TournamentEvent
 from api.schemas.tournament_draw import (
     TournamentDrawResponse, TournamentMatchResponse, TournamentInfo,
     TournamentWithDraws, TournamentDrawDetails, TournamentListItem,
@@ -24,11 +24,11 @@ class TournamentDrawService:
         sort_by: str = "start_date_time",
         sort_order: str = "desc"
     ) -> TournamentSearchResponse:
-        """Get paginated list of tournaments with draw counts from tournament_draws"""
+        """Get paginated list of tournaments with draw counts and event tags"""
         
         query = self.db.query(Tournament)
         
-        # Apply filters (same as before)
+        # Apply filters
         if filters:
             if filters.date_from:
                 query = query.filter(Tournament.start_date_time >= filters.date_from)
@@ -70,19 +70,16 @@ class TournamentDrawService:
         offset = (page - 1) * page_size
         tournaments = query.offset(offset).limit(page_size).all()
         
-        # Build response with draw information from tournament_draws table
+        # Build response with draw and event information
         tournament_items = []
         for tournament in tournaments:
-            # Use case-insensitive comparison for tournament IDs
-            draws = self.db.query(TournamentDraw).filter(
+            # Get draw count from tournament_draws table (case-insensitive)
+            draws_count = self.db.query(func.count(TournamentDraw.draw_id)).filter(
                 func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
-            ).all()
+            ).scalar() or 0
             
-            # Count total draws
-            draws_count = len(draws)
-            
-            # NEW LOGIC: Create aggregated event descriptions
-            events = self._aggregate_tournament_events(draws)
+            # Get event tags from tournament_events table
+            events = self._get_tournament_event_tags(tournament.tournament_id)
             
             tournament_items.append(TournamentListItem(
                 tournament_id=tournament.tournament_id,
@@ -94,7 +91,7 @@ class TournamentDrawService:
                 organization_division=tournament.organization_division,
                 tournament_type=tournament.tournament_type,
                 draws_count=draws_count,
-                events=events  # Simplified event list
+                events=events
             ))
         
         return TournamentSearchResponse(
@@ -105,62 +102,130 @@ class TournamentDrawService:
             has_next=offset + page_size < total_count,
             has_previous=page > 1
         )
-    def _aggregate_tournament_events(self, draws: List[TournamentDraw]) -> List[str]:
+
+    def _get_tournament_event_tags(self, tournament_id: str) -> List[str]:
         """
-        Aggregate tournament events into simplified tags:
-        - "Men's", "Women's", or "Men's and Women's"
-        - "Singles", "Doubles", or "Singles and Doubles"
+        Get aggregated event tags from tournament_events table
+        Returns tags like ["Men's and Women's", "Singles and Doubles"]
         """
-        if not draws:
+        # Query tournament_events for this tournament (case-insensitive)
+        events = self.db.query(TournamentEvent).filter(
+            func.upper(TournamentEvent.tournament_id) == func.upper(tournament_id)
+        ).all()
+        
+        if not events:
             return []
         
-        has_mens = False
-        has_womens = False
-        has_singles = False
-        has_doubles = False
+        # Check what genders and event types exist
+        has_boys = any(e.gender == 'boys' for e in events)
+        has_girls = any(e.gender == 'girls' for e in events)
+        has_singles = any(e.event_type == 'singles' for e in events)
+        has_doubles = any(e.event_type == 'doubles' for e in events)
         
-        for draw in draws:
-            if draw.draw_name:
-                draw_name = draw.draw_name.lower()
-                
-                # Check for gender
-                if 'women' in draw_name:
-                    has_womens = True
-                elif 'men' in draw_name:
-                    has_mens = True
-                else:
-                    # Fallback to gender field
-                    if draw.gender == 'FEMALE':
-                        has_womens = True
-                    elif draw.gender == 'MALE':
-                        has_mens = True
-            
-            # Check for event type
-            if draw.event_type == 'SINGLES' or (draw.draw_name and 'singles' in draw.draw_name.lower()):
-                has_singles = True
-            elif draw.event_type == 'DOUBLES' or (draw.draw_name and 'doubles' in draw.draw_name.lower()):
-                has_doubles = True
+        tags = []
         
-        events = []
-        
-        # Add gender tag
-        if has_mens and has_womens:
-            events.append("Men's and Women's")
-        elif has_mens:
-            events.append("Men's")
-        elif has_womens:
-            events.append("Women's")
+        # Add gender tag (convert boys/girls to Men's/Women's for display)
+        if has_boys and has_girls:
+            tags.append("Men's and Women's")
+        elif has_boys:
+            tags.append("Men's")
+        elif has_girls:
+            tags.append("Women's")
         
         # Add event type tag
         if has_singles and has_doubles:
-            events.append("Singles and Doubles")
+            tags.append("Singles and Doubles")
         elif has_singles:
-            events.append("Singles")
+            tags.append("Singles")
         elif has_doubles:
-            events.append("Doubles")
+            tags.append("Doubles")
         
-        return events
+        return tags
+
+    def search_tournaments(
+        self, 
+        query: Optional[str] = None,
+        filters: Optional[TournamentSearchFilters] = None,
+        page: int = 1,
+        page_size: int = 20
+    ) -> TournamentSearchResponse:
+        """Search tournaments by name, location, or organization"""
         
+        db_query = self.db.query(Tournament)
+        
+        # Apply text search
+        if query:
+            search_filter = or_(
+                Tournament.name.ilike(f"%{query}%"),
+                Tournament.location_name.ilike(f"%{query}%"),
+                Tournament.organization_name.ilike(f"%{query}%")
+            )
+            db_query = db_query.filter(search_filter)
+        
+        # Apply additional filters
+        if filters:
+            if filters.date_from:
+                db_query = db_query.filter(Tournament.start_date_time >= filters.date_from)
+            if filters.date_to:
+                db_query = db_query.filter(Tournament.end_date_time <= filters.date_to)
+            if filters.tournament_type:
+                db_query = db_query.filter(Tournament.tournament_type == filters.tournament_type)
+            if filters.division:
+                db_query = db_query.filter(Tournament.organization_division == filters.division)
+            if filters.status:
+                now = datetime.utcnow()
+                if filters.status == "upcoming":
+                    db_query = db_query.filter(Tournament.start_date_time > now)
+                elif filters.status == "current":
+                    db_query = db_query.filter(
+                        and_(
+                            Tournament.start_date_time <= now,
+                            Tournament.end_date_time >= now
+                        )
+                    )
+                elif filters.status == "completed":
+                    db_query = db_query.filter(Tournament.end_date_time < now)
+        
+        # Get total count
+        total_count = db_query.count()
+        
+        # Apply pagination and ordering
+        offset = (page - 1) * page_size
+        tournaments = db_query.order_by(desc(Tournament.start_date_time)).offset(offset).limit(page_size).all()
+        
+        # Build response items
+        tournament_items = []
+        for tournament in tournaments:
+            # Get draw count (case-insensitive)
+            draws_count = self.db.query(func.count(TournamentDraw.draw_id)).filter(
+                func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
+            ).scalar() or 0
+            
+            # Get event tags from tournament_events
+            events = self._get_tournament_event_tags(tournament.tournament_id)
+            
+            tournament_items.append(TournamentListItem(
+                tournament_id=tournament.tournament_id,
+                name=tournament.name,
+                start_date_time=tournament.start_date_time,
+                end_date_time=tournament.end_date_time,
+                location_name=tournament.location_name,
+                organization_name=tournament.organization_name,
+                organization_division=tournament.organization_division,
+                tournament_type=tournament.tournament_type,
+                draws_count=draws_count,
+                events=events
+            ))
+        
+        return TournamentSearchResponse(
+            tournaments=tournament_items,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+            has_next=offset + page_size < total_count,
+            has_previous=page > 1
+        )
+
     def get_tournament_with_draws(self, tournament_id: str) -> Optional[TournamentWithDraws]:
         """Get tournament details with all its draws"""
         
@@ -171,7 +236,7 @@ class TournamentDrawService:
         if not tournament:
             return None
         
-        # CRITICAL FIX: Use case-insensitive comparison
+        # Get draws (case-insensitive)
         draws = self.db.query(TournamentDraw).filter(
             func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
         ).order_by(TournamentDraw.gender, TournamentDraw.event_type).all()
@@ -389,90 +454,4 @@ class TournamentDrawService:
             draw_size=draw.draw_size or 0,
             rounds=rounds,
             positions=sorted(positions, key=lambda x: x.draw_position)
-        )
-
-    def search_tournaments(
-    self, 
-    query: Optional[str] = None,
-    filters: Optional[TournamentSearchFilters] = None,
-    page: int = 1,
-    page_size: int = 20
-) -> TournamentSearchResponse:
-        """Search tournaments by name, location, or organization"""
-        
-        db_query = self.db.query(Tournament)
-        
-        # Apply text search
-        if query:
-            search_filter = or_(
-                Tournament.name.ilike(f"%{query}%"),
-                Tournament.location_name.ilike(f"%{query}%"),
-                Tournament.organization_name.ilike(f"%{query}%")
-            )
-            db_query = db_query.filter(search_filter)
-        
-        # Apply additional filters (same as before)
-        if filters:
-            if filters.date_from:
-                db_query = db_query.filter(Tournament.start_date_time >= filters.date_from)
-            if filters.date_to:
-                db_query = db_query.filter(Tournament.end_date_time <= filters.date_to)
-            if filters.tournament_type:
-                db_query = db_query.filter(Tournament.tournament_type == filters.tournament_type)
-            if filters.division:
-                db_query = db_query.filter(Tournament.organization_division == filters.division)
-            if filters.status:
-                now = datetime.utcnow()
-                if filters.status == "upcoming":
-                    db_query = db_query.filter(Tournament.start_date_time > now)
-                elif filters.status == "current":
-                    db_query = db_query.filter(
-                        and_(
-                            Tournament.start_date_time <= now,
-                            Tournament.end_date_time >= now
-                        )
-                    )
-                elif filters.status == "completed":
-                    db_query = db_query.filter(Tournament.end_date_time < now)
-        
-        # Get total count
-        total_count = db_query.count()
-        
-        # Apply pagination and ordering
-        offset = (page - 1) * page_size
-        tournaments = db_query.order_by(desc(Tournament.start_date_time)).offset(offset).limit(page_size).all()
-        
-        # Build response items with draws from tournament_draws table
-        tournament_items = []
-        for tournament in tournaments:
-            # Use case-insensitive comparison for tournament IDs
-            draws = self.db.query(TournamentDraw).filter(
-                func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
-            ).all()
-            
-            draws_count = len(draws)
-            
-            # NEW LOGIC: Use aggregated events
-            events = self._aggregate_tournament_events(draws)
-            
-            tournament_items.append(TournamentListItem(
-                tournament_id=tournament.tournament_id,
-                name=tournament.name,
-                start_date_time=tournament.start_date_time,
-                end_date_time=tournament.end_date_time,
-                location_name=tournament.location_name,
-                organization_name=tournament.organization_name,
-                organization_division=tournament.organization_division,
-                tournament_type=tournament.tournament_type,
-                draws_count=draws_count,
-                events=events  # Simplified event list
-            ))
-        
-        return TournamentSearchResponse(
-            tournaments=tournament_items,
-            total_count=total_count,
-            page=page,
-            page_size=page_size,
-            has_next=offset + page_size < total_count,
-            has_previous=page > 1
         )
