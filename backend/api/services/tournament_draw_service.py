@@ -24,8 +24,8 @@ class TournamentDrawService:
         sort_by: str = "start_date_time",
         sort_order: str = "desc"
     ) -> TournamentSearchResponse:
-        """Get paginated list of tournaments with draw counts"""
-    
+        """Get paginated list of tournaments with draw counts from tournament_draws"""
+        
         query = self.db.query(Tournament)
         
         # Apply filters
@@ -40,7 +40,7 @@ class TournamentDrawService:
                 query = query.filter(Tournament.location_name.ilike(f"%{filters.location}%"))
             if filters.organization:
                 query = query.filter(Tournament.organization_name.ilike(f"%{filters.organization}%"))
-            if filters.division:  # ADD DIVISION FILTER
+            if filters.division:  # Add division filter
                 query = query.filter(Tournament.organization_division == filters.division)
             if filters.status:
                 now = datetime.utcnow()
@@ -70,34 +70,48 @@ class TournamentDrawService:
         offset = (page - 1) * page_size
         tournaments = query.offset(offset).limit(page_size).all()
         
-        # Build response with draw information
+        # Build response with draw information from tournament_draws table
         tournament_items = []
         for tournament in tournaments:
-            # FIX: Use proper aggregation for draws count
-            draws_query = self.db.query(TournamentDraw).filter(
-                TournamentDraw.tournament_id == tournament.tournament_id
-            )
-            draws = draws_query.all()
+            # CRITICAL FIX: Use case-insensitive comparison for tournament IDs
+            draws = self.db.query(TournamentDraw).filter(
+                func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
+            ).all()
+            
+            # Count total draws
             draws_count = len(draws)
             
-            # Get unique event names, handling both men's and women's
+            # Create event descriptions based on draw_name (more reliable than gender field)
             event_set = set()
             for draw in draws:
                 if draw.draw_name:
-                    # Parse draw name to get base event type
-                    draw_name = draw.draw_name
-                    if "Singles" in draw_name:
-                        if "Men" in draw_name or "Male" in draw_name:
-                            event_set.add("Men's Singles")
-                        if "Women" in draw_name or "Female" in draw_name:
-                            event_set.add("Women's Singles")
-                    elif "Doubles" in draw_name:
-                        if "Men" in draw_name or "Male" in draw_name:
-                            event_set.add("Men's Doubles")
-                        if "Women" in draw_name or "Female" in draw_name:
-                            event_set.add("Women's Doubles")
-            
-            events = list(event_set)
+                    draw_name = draw.draw_name.lower()
+                    
+                    # Parse event type and gender from draw_name
+                    # Check for gender indicators in the name
+                    if 'women' in draw_name:
+                        gender_label = "Women's"
+                    elif 'men' in draw_name:  # This will catch "men" but not "women"
+                        gender_label = "Men's"
+                    else:
+                        # Fallback to gender field if name doesn't indicate
+                        if draw.gender == 'FEMALE':
+                            gender_label = "Women's"
+                        elif draw.gender == 'MALE':
+                            gender_label = "Men's"
+                        else:
+                            gender_label = "Mixed"
+                    
+                    # Check for event type
+                    if 'singles' in draw_name or draw.event_type == 'SINGLES':
+                        event_type_label = "Singles"
+                    elif 'doubles' in draw_name or draw.event_type == 'DOUBLES':
+                        event_type_label = "Doubles"
+                    else:
+                        continue  # Skip if we can't determine type
+                    
+                    # Add to set (this automatically handles duplicates)
+                    event_set.add(f"{gender_label} {event_type_label}")
             
             tournament_items.append(TournamentListItem(
                 tournament_id=tournament.tournament_id,
@@ -106,10 +120,10 @@ class TournamentDrawService:
                 end_date_time=tournament.end_date_time,
                 location_name=tournament.location_name,
                 organization_name=tournament.organization_name,
-                organization_division=tournament.organization_division,  # ADD THIS
+                organization_division=tournament.organization_division,  # Include division
                 tournament_type=tournament.tournament_type,
-                draws_count=draws_count,
-                events=events
+                draws_count=draws_count,  # Actual count from tournament_draws
+                events=sorted(list(event_set))  # Sort for consistent display
             ))
         
         return TournamentSearchResponse(
@@ -120,7 +134,6 @@ class TournamentDrawService:
             has_next=offset + page_size < total_count,
             has_previous=page > 1
         )
-
     def get_tournament_with_draws(self, tournament_id: str) -> Optional[TournamentWithDraws]:
         """Get tournament details with all its draws"""
         
@@ -131,9 +144,9 @@ class TournamentDrawService:
         if not tournament:
             return None
         
-        # Get draws for this tournament
+        # CRITICAL FIX: Use case-insensitive comparison
         draws = self.db.query(TournamentDraw).filter(
-            TournamentDraw.tournament_id == tournament_id
+            func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
         ).order_by(TournamentDraw.gender, TournamentDraw.event_type).all()
         
         draw_responses = [TournamentDrawResponse.from_orm(draw) for draw in draws]
@@ -352,12 +365,12 @@ class TournamentDrawService:
         )
 
     def search_tournaments(
-        self, 
-        query: Optional[str] = None,
-        filters: Optional[TournamentSearchFilters] = None,
-        page: int = 1,
-        page_size: int = 20
-    ) -> TournamentSearchResponse:
+    self, 
+    query: Optional[str] = None,
+    filters: Optional[TournamentSearchFilters] = None,
+    page: int = 1,
+    page_size: int = 20
+) -> TournamentSearchResponse:
         """Search tournaments by name, location, or organization"""
         
         db_query = self.db.query(Tournament)
@@ -379,6 +392,8 @@ class TournamentDrawService:
                 db_query = db_query.filter(Tournament.end_date_time <= filters.date_to)
             if filters.tournament_type:
                 db_query = db_query.filter(Tournament.tournament_type == filters.tournament_type)
+            if filters.division:  # Add division filter
+                db_query = db_query.filter(Tournament.organization_division == filters.division)
             if filters.status:
                 now = datetime.utcnow()
                 if filters.status == "upcoming":
@@ -400,18 +415,45 @@ class TournamentDrawService:
         offset = (page - 1) * page_size
         tournaments = db_query.order_by(desc(Tournament.start_date_time)).offset(offset).limit(page_size).all()
         
-        # Build response items
+        # Build response items with draws from tournament_draws table
         tournament_items = []
         for tournament in tournaments:
-            draws_count = self.db.query(func.count(TournamentDraw.draw_id)).filter(
-                TournamentDraw.tournament_id == tournament.tournament_id
-            ).scalar() or 0
+            # CRITICAL FIX: Use case-insensitive comparison for tournament IDs
+            draws = self.db.query(TournamentDraw).filter(
+                func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
+            ).all()
             
-            # Get event types
-            events = self.db.query(TournamentDraw.draw_name).filter(
-                TournamentDraw.tournament_id == tournament.tournament_id
-            ).distinct().all()
-            event_list = [event[0] for event in events if event[0]]
+            draws_count = len(draws)
+            
+            # Parse event types from draw names (more reliable than gender field)
+            event_set = set()
+            for draw in draws:
+                if draw.draw_name:
+                    draw_name = draw.draw_name.lower()
+                    
+                    # Determine gender from draw_name
+                    if 'women' in draw_name:
+                        gender_label = "Women's"
+                    elif 'men' in draw_name:
+                        gender_label = "Men's"
+                    else:
+                        # Fallback to gender field
+                        if draw.gender == 'FEMALE':
+                            gender_label = "Women's"
+                        elif draw.gender == 'MALE':
+                            gender_label = "Men's"
+                        else:
+                            gender_label = "Mixed"
+                    
+                    # Determine event type
+                    if 'singles' in draw_name or draw.event_type == 'SINGLES':
+                        event_type_label = "Singles"
+                    elif 'doubles' in draw_name or draw.event_type == 'DOUBLES':
+                        event_type_label = "Doubles"
+                    else:
+                        continue
+                    
+                    event_set.add(f"{gender_label} {event_type_label}")
             
             tournament_items.append(TournamentListItem(
                 tournament_id=tournament.tournament_id,
@@ -420,9 +462,10 @@ class TournamentDrawService:
                 end_date_time=tournament.end_date_time,
                 location_name=tournament.location_name,
                 organization_name=tournament.organization_name,
+                organization_division=tournament.organization_division,
                 tournament_type=tournament.tournament_type,
                 draws_count=draws_count,
-                events=event_list
+                events=sorted(list(event_set))
             ))
         
         return TournamentSearchResponse(
