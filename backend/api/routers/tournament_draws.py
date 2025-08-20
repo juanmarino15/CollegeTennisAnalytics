@@ -25,12 +25,13 @@ def get_tournaments(
     tournament_type: Optional[str] = Query(None, description="Filter by tournament type"),
     location: Optional[str] = Query(None, description="Filter by location"),
     organization: Optional[str] = Query(None, description="Filter by organization"),
+    division: Optional[str] = Query(None, description="Filter by division (DIV_I, DIV_II, DIV_III)"),  # ADD THIS
     status: Optional[str] = Query(None, regex="^(upcoming|current|completed)$", description="Filter by status"),
     db: Session = Depends(get_db)
 ):
     """
     Get a paginated list of tournaments with their basic information and draw counts.
-    Supports filtering by date range, type, location, organization, and status.
+    Supports filtering by date range, type, location, organization, division, and status.
     """
     service = TournamentDrawService(db)
     
@@ -40,6 +41,7 @@ def get_tournaments(
         tournament_type=tournament_type,
         location=location,
         organization=organization,
+        division=division,  # ADD THIS
         status=status
     )
     

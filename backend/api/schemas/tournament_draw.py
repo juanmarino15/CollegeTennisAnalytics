@@ -122,6 +122,7 @@ class TournamentListItem(BaseModel):
     end_date_time: Optional[datetime] = None
     location_name: Optional[str] = None
     organization_name: Optional[str] = None
+    organization_division: Optional[str] = None  
     tournament_type: Optional[str] = None
     draws_count: int = 0
     events: List[str] = []  # List of event types like ["Men's Singles", "Women's Doubles"]
@@ -159,6 +160,7 @@ class TournamentSearchFilters(BaseModel):
     tournament_type: Optional[str] = None
     location: Optional[str] = None
     organization: Optional[str] = None
+    division: Optional[str] = None  
     gender: Optional[str] = None
     event_type: Optional[str] = None
     status: Optional[str] = None  # upcoming, current, completed
