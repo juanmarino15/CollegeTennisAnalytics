@@ -170,133 +170,133 @@ class TournamentDrawService:
             draws=draw_responses
         )
 
-        def get_draw_details(self, draw_id: str) -> Optional[TournamentDrawDetails]:
-            """Get detailed draw information including matches"""
-            
-            draw = self.db.query(TournamentDraw).filter(
-                TournamentDraw.draw_id == draw_id
-            ).first()
-            
-            if not draw:
-                return None
-            
-            # Get tournament info
-            tournament = self.db.query(Tournament).filter(
-                Tournament.tournament_id == draw.tournament_id
-            ).first()
-            
-            # Get matches for this draw
-            matches = self.db.query(TournamentMatch).filter(
-                TournamentMatch.draw_id == draw_id
-            ).order_by(TournamentMatch.round_number, TournamentMatch.round_position).all()
-            
-            # Convert matches to response format
-            match_responses = []
-            for match in matches:
-                side1 = TournamentMatchParticipant(
-                    participant_id=match.side1_participant_id,
-                    participant_name=match.side1_participant_name,
-                    draw_position=match.side1_draw_position,
-                    seed_number=match.side1_seed_number,
-                    school_name=match.side1_school_name,
-                    school_id=match.side1_school_id,
-                    player1_id=match.side1_player1_id,
-                    player1_name=match.side1_player1_name,
-                    player2_id=match.side1_player2_id,
-                    player2_name=match.side1_player2_name
-                )
-                
-                side2 = TournamentMatchParticipant(
-                    participant_id=match.side2_participant_id,
-                    participant_name=match.side2_participant_name,
-                    draw_position=match.side2_draw_position,
-                    seed_number=match.side2_seed_number,
-                    school_name=match.side2_school_name,
-                    school_id=match.side2_school_id,
-                    player1_id=match.side2_player1_id,
-                    player1_name=match.side2_player1_name,
-                    player2_id=match.side2_player2_id,
-                    player2_name=match.side2_player2_name
-                )
-                
-                match_response = TournamentMatchResponse(
-                    id=match.id,
-                    match_up_id=match.match_up_id,
-                    draw_id=match.draw_id,
-                    tournament_id=match.tournament_id,
-                    event_id=match.event_id,
-                    round_name=match.round_name,
-                    round_number=match.round_number,
-                    round_position=match.round_position,
-                    match_type=match.match_type,
-                    match_format=match.match_format,
-                    match_status=match.match_status,
-                    stage=match.stage,
-                    structure_name=match.structure_name,
-                    side1=side1,
-                    side2=side2,
-                    winning_side=match.winning_side,
-                    winner_participant_id=match.winner_participant_id,
-                    winner_participant_name=match.winner_participant_name,
-                    score_side1=match.score_side1,
-                    score_side2=match.score_side2,
-                    scheduled_date=match.scheduled_date,
-                    scheduled_time=match.scheduled_time,
-                    venue_name=match.venue_name,
-                    created_at_api=match.created_at_api,
-                    updated_at_api=match.updated_at_api,
-                    created_at=match.created_at,
-                    updated_at=match.updated_at
-                )
-                match_responses.append(match_response)
-            
-            # Calculate statistics
-            total_matches = len(matches)
-            completed_matches = len([m for m in matches if m.match_status == "COMPLETED"])
-            scheduled_matches = len([m for m in matches if m.match_status == "SCHEDULED"])
-            
-            # Count unique participants
-            participants = set()
-            for match in matches:
-                if match.side1_participant_id:
-                    participants.add(match.side1_participant_id)
-                if match.side2_participant_id:
-                    participants.add(match.side2_participant_id)
-            
-            tournament_info = None
-            if tournament:
-                tournament_info = TournamentInfo(
-                    tournament_id=tournament.tournament_id,
-                    name=tournament.name,
-                    start_date_time=tournament.start_date_time,
-                    end_date_time=tournament.end_date_time,
-                    location_name=tournament.location_name,
-                    organization_name=tournament.organization_name,
-                    tournament_type=tournament.tournament_type
-                )
-            
-            return TournamentDrawDetails(
-                draw_id=draw.draw_id,
-                tournament_id=draw.tournament_id,
-                event_id=draw.event_id,
-                draw_name=draw.draw_name,
-                draw_type=draw.draw_type,
-                draw_size=draw.draw_size,
-                event_type=draw.event_type,
-                gender=draw.gender,
-                draw_completed=draw.draw_completed,
-                draw_active=draw.draw_active,
-                match_up_format=draw.match_up_format,
-                updated_at_api=draw.updated_at_api,
-                created_at=draw.created_at,
-                updated_at=draw.updated_at,
-                tournament=tournament_info,
-                matches=match_responses,
-                total_matches=total_matches,
-                completed_matches=completed_matches,
-                scheduled_matches=scheduled_matches,
-                participants_count=len(participants)
+    def get_draw_details(self, draw_id: str) -> Optional[TournamentDrawDetails]:
+        """Get detailed draw information including matches"""
+        
+        draw = self.db.query(TournamentDraw).filter(
+            TournamentDraw.draw_id == draw_id
+        ).first()
+        
+        if not draw:
+            return None
+        
+        # Get tournament info
+        tournament = self.db.query(Tournament).filter(
+            Tournament.tournament_id == draw.tournament_id
+        ).first()
+        
+        # Get matches for this draw
+        matches = self.db.query(TournamentMatch).filter(
+            TournamentMatch.draw_id == draw_id
+        ).order_by(TournamentMatch.round_number, TournamentMatch.round_position).all()
+        
+        # Convert matches to response format
+        match_responses = []
+        for match in matches:
+            side1 = TournamentMatchParticipant(
+                participant_id=match.side1_participant_id,
+                participant_name=match.side1_participant_name,
+                draw_position=match.side1_draw_position,
+                seed_number=match.side1_seed_number,
+                school_name=match.side1_school_name,
+                school_id=match.side1_school_id,
+                player1_id=match.side1_player1_id,
+                player1_name=match.side1_player1_name,
+                player2_id=match.side1_player2_id,
+                player2_name=match.side1_player2_name
             )
+            
+            side2 = TournamentMatchParticipant(
+                participant_id=match.side2_participant_id,
+                participant_name=match.side2_participant_name,
+                draw_position=match.side2_draw_position,
+                seed_number=match.side2_seed_number,
+                school_name=match.side2_school_name,
+                school_id=match.side2_school_id,
+                player1_id=match.side2_player1_id,
+                player1_name=match.side2_player1_name,
+                player2_id=match.side2_player2_id,
+                player2_name=match.side2_player2_name
+            )
+            
+            match_response = TournamentMatchResponse(
+                id=match.id,
+                match_up_id=match.match_up_id,
+                draw_id=match.draw_id,
+                tournament_id=match.tournament_id,
+                event_id=match.event_id,
+                round_name=match.round_name,
+                round_number=match.round_number,
+                round_position=match.round_position,
+                match_type=match.match_type,
+                match_format=match.match_format,
+                match_status=match.match_status,
+                stage=match.stage,
+                structure_name=match.structure_name,
+                side1=side1,
+                side2=side2,
+                winning_side=match.winning_side,
+                winner_participant_id=match.winner_participant_id,
+                winner_participant_name=match.winner_participant_name,
+                score_side1=match.score_side1,
+                score_side2=match.score_side2,
+                scheduled_date=match.scheduled_date,
+                scheduled_time=match.scheduled_time,
+                venue_name=match.venue_name,
+                created_at_api=match.created_at_api,
+                updated_at_api=match.updated_at_api,
+                created_at=match.created_at,
+                updated_at=match.updated_at
+            )
+            match_responses.append(match_response)
+        
+        # Calculate statistics
+        total_matches = len(matches)
+        completed_matches = len([m for m in matches if m.match_status == "COMPLETED"])
+        scheduled_matches = len([m for m in matches if m.match_status == "SCHEDULED"])
+        
+        # Count unique participants
+        participants = set()
+        for match in matches:
+            if match.side1_participant_id:
+                participants.add(match.side1_participant_id)
+            if match.side2_participant_id:
+                participants.add(match.side2_participant_id)
+        
+        tournament_info = None
+        if tournament:
+            tournament_info = TournamentInfo(
+                tournament_id=tournament.tournament_id,
+                name=tournament.name,
+                start_date_time=tournament.start_date_time,
+                end_date_time=tournament.end_date_time,
+                location_name=tournament.location_name,
+                organization_name=tournament.organization_name,
+                tournament_type=tournament.tournament_type
+            )
+        
+        return TournamentDrawDetails(
+            draw_id=draw.draw_id,
+            tournament_id=draw.tournament_id,
+            event_id=draw.event_id,
+            draw_name=draw.draw_name,
+            draw_type=draw.draw_type,
+            draw_size=draw.draw_size,
+            event_type=draw.event_type,
+            gender=draw.gender,
+            draw_completed=draw.draw_completed,
+            draw_active=draw.draw_active,
+            match_up_format=draw.match_up_format,
+            updated_at_api=draw.updated_at_api,
+            created_at=draw.created_at,
+            updated_at=draw.updated_at,
+            tournament=tournament_info,
+            matches=match_responses,
+            total_matches=total_matches,
+            completed_matches=completed_matches,
+            scheduled_matches=scheduled_matches,
+            participants_count=len(participants)
+        )
 
     def get_tournament_draws(self, tournament_id: str) -> List[TournamentDrawResponse]:
         """Get all draws for a specific tournament"""
