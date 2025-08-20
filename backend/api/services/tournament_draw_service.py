@@ -229,8 +229,11 @@ class TournamentDrawService:
     def get_tournament_with_draws(self, tournament_id: str) -> Optional[TournamentWithDraws]:
         """Get tournament details with all its draws"""
         
+        # Convert tournament_id to uppercase for consistent matching
+        tournament_id_upper = tournament_id.upper()
+        
         tournament = self.db.query(Tournament).filter(
-            Tournament.tournament_id == tournament_id
+            func.upper(Tournament.tournament_id) == tournament_id_upper
         ).first()
         
         if not tournament:
@@ -238,7 +241,7 @@ class TournamentDrawService:
         
         # Get draws (case-insensitive)
         draws = self.db.query(TournamentDraw).filter(
-            func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
+            func.upper(TournamentDraw.tournament_id) == tournament_id_upper
         ).order_by(TournamentDraw.gender, TournamentDraw.event_type).all()
         
         draw_responses = [TournamentDrawResponse.from_orm(draw) for draw in draws]
@@ -257,8 +260,11 @@ class TournamentDrawService:
     def get_draw_details(self, draw_id: str) -> Optional[TournamentDrawDetails]:
         """Get detailed draw information including matches"""
         
+        # Convert draw_id to uppercase for consistent matching
+        draw_id_upper = draw_id.upper()
+        
         draw = self.db.query(TournamentDraw).filter(
-            TournamentDraw.draw_id == draw_id
+            func.upper(TournamentDraw.draw_id) == draw_id_upper
         ).first()
         
         if not draw:
@@ -266,12 +272,12 @@ class TournamentDrawService:
         
         # Get tournament info
         tournament = self.db.query(Tournament).filter(
-            Tournament.tournament_id == draw.tournament_id
+            func.upper(Tournament.tournament_id) == func.upper(draw.tournament_id)
         ).first()
         
-        # Get matches for this draw
+        # Get matches for this draw (case-insensitive)
         matches = self.db.query(TournamentMatch).filter(
-            TournamentMatch.draw_id == draw_id
+            func.upper(TournamentMatch.draw_id) == draw_id_upper
         ).order_by(TournamentMatch.round_number, TournamentMatch.round_position).all()
         
         # Convert matches to response format
@@ -385,8 +391,11 @@ class TournamentDrawService:
     def get_tournament_draws(self, tournament_id: str) -> List[TournamentDrawResponse]:
         """Get all draws for a specific tournament"""
         
+        # Convert tournament_id to uppercase for consistent matching
+        tournament_id_upper = tournament_id.upper()
+        
         draws = self.db.query(TournamentDraw).filter(
-            TournamentDraw.tournament_id == tournament_id
+            func.upper(TournamentDraw.tournament_id) == tournament_id_upper
         ).order_by(TournamentDraw.gender, TournamentDraw.event_type).all()
         
         return [TournamentDrawResponse.from_orm(draw) for draw in draws]
@@ -394,16 +403,19 @@ class TournamentDrawService:
     def get_draw_bracket(self, draw_id: str) -> Optional[TournamentBracket]:
         """Get bracket visualization data for a draw"""
         
+        # Convert draw_id to uppercase for consistent matching
+        draw_id_upper = draw_id.upper()
+        
         draw = self.db.query(TournamentDraw).filter(
-            TournamentDraw.draw_id == draw_id
+            func.upper(TournamentDraw.draw_id) == draw_id_upper
         ).first()
         
         if not draw:
             return None
         
-        # Get all matches for this draw to build bracket positions
+        # Get all matches for this draw to build bracket positions (case-insensitive)
         matches = self.db.query(TournamentMatch).filter(
-            TournamentMatch.draw_id == draw_id
+            func.upper(TournamentMatch.draw_id) == draw_id_upper
         ).order_by(TournamentMatch.round_number, TournamentMatch.round_position).all()
         
         # Build bracket positions from matches
