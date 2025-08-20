@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, asc, func, text
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time 
 
 from models.models import Tournament, TournamentDraw, TournamentMatch, TournamentEvent
 from api.schemas.tournament_draw import (
@@ -331,7 +331,12 @@ class TournamentDrawService:
                 score_side1=match.score_side1,
                 score_side2=match.score_side2,
                 scheduled_date=match.scheduled_date,
-                scheduled_time=match.scheduled_time,
+                # Fix the scheduled_time conversion:
+                scheduled_time=None if match.scheduled_time is None else (
+                    datetime.combine(match.scheduled_date, match.scheduled_time) 
+                    if match.scheduled_date and isinstance(match.scheduled_time, time) 
+                    else match.scheduled_time
+                ),
                 venue_name=match.venue_name,
                 created_at_api=match.created_at_api,
                 updated_at_api=match.updated_at_api,
