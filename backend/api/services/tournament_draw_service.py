@@ -105,7 +105,62 @@ class TournamentDrawService:
             has_next=offset + page_size < total_count,
             has_previous=page > 1
         )
-    
+    def _aggregate_tournament_events(self, draws: List[TournamentDraw]) -> List[str]:
+        """
+        Aggregate tournament events into simplified tags:
+        - "Men's", "Women's", or "Men's and Women's"
+        - "Singles", "Doubles", or "Singles and Doubles"
+        """
+        if not draws:
+            return []
+        
+        has_mens = False
+        has_womens = False
+        has_singles = False
+        has_doubles = False
+        
+        for draw in draws:
+            if draw.draw_name:
+                draw_name = draw.draw_name.lower()
+                
+                # Check for gender
+                if 'women' in draw_name:
+                    has_womens = True
+                elif 'men' in draw_name:
+                    has_mens = True
+                else:
+                    # Fallback to gender field
+                    if draw.gender == 'FEMALE':
+                        has_womens = True
+                    elif draw.gender == 'MALE':
+                        has_mens = True
+            
+            # Check for event type
+            if draw.event_type == 'SINGLES' or (draw.draw_name and 'singles' in draw.draw_name.lower()):
+                has_singles = True
+            elif draw.event_type == 'DOUBLES' or (draw.draw_name and 'doubles' in draw.draw_name.lower()):
+                has_doubles = True
+        
+        events = []
+        
+        # Add gender tag
+        if has_mens and has_womens:
+            events.append("Men's and Women's")
+        elif has_mens:
+            events.append("Men's")
+        elif has_womens:
+            events.append("Women's")
+        
+        # Add event type tag
+        if has_singles and has_doubles:
+            events.append("Singles and Doubles")
+        elif has_singles:
+            events.append("Singles")
+        elif has_doubles:
+            events.append("Doubles")
+        
+        return events
+        
     def get_tournament_with_draws(self, tournament_id: str) -> Optional[TournamentWithDraws]:
         """Get tournament details with all its draws"""
         
@@ -356,7 +411,7 @@ class TournamentDrawService:
             )
             db_query = db_query.filter(search_filter)
         
-        # Apply additional filters
+        # Apply additional filters (same as before)
         if filters:
             if filters.date_from:
                 db_query = db_query.filter(Tournament.start_date_time >= filters.date_from)
@@ -364,7 +419,7 @@ class TournamentDrawService:
                 db_query = db_query.filter(Tournament.end_date_time <= filters.date_to)
             if filters.tournament_type:
                 db_query = db_query.filter(Tournament.tournament_type == filters.tournament_type)
-            if filters.division:  # Add division filter
+            if filters.division:
                 db_query = db_query.filter(Tournament.organization_division == filters.division)
             if filters.status:
                 now = datetime.utcnow()
@@ -390,42 +445,15 @@ class TournamentDrawService:
         # Build response items with draws from tournament_draws table
         tournament_items = []
         for tournament in tournaments:
-            # CRITICAL FIX: Use case-insensitive comparison for tournament IDs
+            # Use case-insensitive comparison for tournament IDs
             draws = self.db.query(TournamentDraw).filter(
                 func.upper(TournamentDraw.tournament_id) == func.upper(tournament.tournament_id)
             ).all()
             
             draws_count = len(draws)
             
-            # Parse event types from draw names (more reliable than gender field)
-            event_set = set()
-            for draw in draws:
-                if draw.draw_name:
-                    draw_name = draw.draw_name.lower()
-                    
-                    # Determine gender from draw_name
-                    if 'women' in draw_name:
-                        gender_label = "Women's"
-                    elif 'men' in draw_name:
-                        gender_label = "Men's"
-                    else:
-                        # Fallback to gender field
-                        if draw.gender == 'FEMALE':
-                            gender_label = "Women's"
-                        elif draw.gender == 'MALE':
-                            gender_label = "Men's"
-                        else:
-                            gender_label = "Mixed"
-                    
-                    # Determine event type
-                    if 'singles' in draw_name or draw.event_type == 'SINGLES':
-                        event_type_label = "Singles"
-                    elif 'doubles' in draw_name or draw.event_type == 'DOUBLES':
-                        event_type_label = "Doubles"
-                    else:
-                        continue
-                    
-                    event_set.add(f"{gender_label} {event_type_label}")
+            # NEW LOGIC: Use aggregated events
+            events = self._aggregate_tournament_events(draws)
             
             tournament_items.append(TournamentListItem(
                 tournament_id=tournament.tournament_id,
@@ -437,7 +465,7 @@ class TournamentDrawService:
                 organization_division=tournament.organization_division,
                 tournament_type=tournament.tournament_type,
                 draws_count=draws_count,
-                events=sorted(list(event_set))
+                events=events  # Simplified event list
             ))
         
         return TournamentSearchResponse(
