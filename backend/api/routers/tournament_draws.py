@@ -127,19 +127,36 @@ def get_tournament_draws(
 @router.get("/draws/{draw_id}", response_model=TournamentDrawDetails)
 def get_draw_details(
     draw_id: str,
+    stage: Optional[str] = Query(None, description="Filter by stage (e.g., 'MAIN', 'CONSOLATION')"),
     db: Session = Depends(get_db)
 ):
     """
     Get detailed information about a specific draw including all matches and statistics.
-    This endpoint provides complete data for displaying a tournament draw with matches.
+    Optionally filter by stage to separate main draw from consolation.
     """
     service = TournamentDrawService(db)
-    draw_details = service.get_draw_details(draw_id)
+    draw_details = service.get_draw_details(draw_id, stage)
     
     if not draw_details:
         raise HTTPException(status_code=404, detail="Draw not found")
     
     return draw_details
+
+@router.get("/draws/{draw_id}/stages", response_model=List[str])
+def get_draw_stages(
+    draw_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all available stages for a draw (e.g., 'MAIN', 'CONSOLATION').
+    """
+    service = TournamentDrawService(db)
+    stages = service.get_draw_stages(draw_id)
+    
+    if not stages:
+        raise HTTPException(status_code=404, detail="No stages found for this draw")
+    
+    return stages
 
 @router.get("/draws/{draw_id}/bracket", response_model=TournamentBracket)
 def get_draw_bracket(

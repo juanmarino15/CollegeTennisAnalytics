@@ -279,6 +279,14 @@ class TournamentDrawService:
         matches = self.db.query(TournamentMatch).filter(
             func.upper(TournamentMatch.draw_id) == draw_id_upper
         ).order_by(TournamentMatch.round_number, TournamentMatch.round_position).all()
+
+        if stage:
+            matches_query = matches_query.filter(TournamentMatch.stage == stage)
+        
+        matches = matches_query.order_by(
+            TournamentMatch.round_number, 
+            TournamentMatch.round_position
+        ).all()
         
         # Convert matches to response format
         match_responses = []
@@ -472,3 +480,14 @@ class TournamentDrawService:
             rounds=rounds,
             positions=sorted(positions, key=lambda x: x.draw_position)
         )
+    def get_draw_stages(self, draw_id: str) -> List[str]:
+        """Get all available stages for a specific draw"""
+        
+        draw_id_upper = draw_id.upper()
+        
+        stages = self.db.query(TournamentMatch.stage).filter(
+            func.upper(TournamentMatch.draw_id) == draw_id_upper,
+            TournamentMatch.stage.isnot(None)
+        ).distinct().all()
+        
+        return [stage[0] for stage in stages if stage[0]]
