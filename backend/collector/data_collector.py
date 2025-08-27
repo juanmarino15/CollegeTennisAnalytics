@@ -45,7 +45,7 @@ class TennisDataCollector:
                 "direction": "DESCENDING"
             },
             "filter": {
-                "seasonStarting": "2024",
+                "seasonStarting": "2025",
                 "isCompleted": True,
                 "divisions": ["DIVISION_1"]
             }
@@ -335,7 +335,7 @@ class TennisDataCollector:
                 "direction": "ASCENDING"
             },
             "filter": {
-                "seasonStarting": "2024",
+                "seasonStarting": "2025",
                 "startDate": {
                     "gte": datetime.now().strftime("%Y-%m-%d")
                 },

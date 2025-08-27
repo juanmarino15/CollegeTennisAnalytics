@@ -97,15 +97,15 @@ class PlayerMatchesCollector:
             # First get the correct season_id from seasons table
             print("\n=== Getting Season ID ===")
             season = session.query(Season)\
-                .filter(Season.name.like('%2024%'))\
+                .filter(Season.name.like('%2026%'))\
                 .first()
                 
             if not season:
-                print("Error: Could not find 2024 season in seasons table")
+                print("Error: Could not find 2025 season in seasons table")
                 return []
                 
             season_id = season.id
-            print(f"Found season_id: {season_id} for 2024 season")
+            print(f"Found season_id: {season_id} for 2025 season")
 
             # Get teams from recent matches
             print("\n=== Getting Recent Matches ===")
@@ -116,7 +116,7 @@ class PlayerMatchesCollector:
                 session.query(Match)
                 .filter(
                     Match.start_date.between(seven_days_ago, date.today()),
-                    Match.season == '2024'
+                    Match.season == '2025'
                 )
                 .all()
 )

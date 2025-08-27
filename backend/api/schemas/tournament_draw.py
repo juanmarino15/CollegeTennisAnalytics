@@ -21,9 +21,10 @@ class TournamentDrawResponse(TournamentDrawBase):
     updated_at_api: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    stage: Optional[str] = None 
     
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # Tournament match schemas
 class TournamentMatchBase(BaseModel):

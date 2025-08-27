@@ -102,7 +102,7 @@ class MatchUpdatesService:
                 "direction": "DESCENDING" 
             },
             "filter": {
-                "seasonStarting": "2024",
+                "seasonStarting": "2025",
                 "isCompleted": is_completed,
                 "divisions": ["DIVISION_1"]
             }

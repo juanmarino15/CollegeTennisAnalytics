@@ -80,7 +80,7 @@ async def main():
         # print("Season information stored!")
 
         # Process all rosters for current season
-        season_id = "0d09ee6d-c173-4d98-8207-7c944409faf0"  # 2024 season
+        season_id = "c3f0d3de-ce9f-4dea-91cd-9de6fd44619b"  # 2025 season
         print("Processing rosters...")
         collector.process_all_rosters(season_id)
         print("Roster processing completed!")

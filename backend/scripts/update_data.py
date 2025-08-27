@@ -79,7 +79,7 @@ async def update_recent_rosters():
         start_time = datetime.now()
         
         collector = MatchUpdatesService(DATABASE_URL)
-        season_id = "0e384cf2-fba6-4bd3-a441-7eb5b2c40300"  # 2024 season
+        season_id = "c3f0d3de-ce9f-4dea-91cd-9de6fd44619b"  # 2025 season
         await collector.process_recent_school_rosters(season_id)
         
         end_time = datetime.now()

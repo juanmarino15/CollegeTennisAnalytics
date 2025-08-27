@@ -257,67 +257,80 @@ class TournamentDrawService:
             draws=draw_responses
         )
 
-    def get_draw_details(self, draw_id: str) -> Optional[TournamentDrawDetails]:
-        """Get detailed draw information including matches"""
+    def get_draw_details(self, draw_id: str, stage: Optional[str] = None) -> Optional[TournamentDrawDetails]:
+        """Get detailed draw information including matches for a specific stage"""
         
-        # Convert draw_id to uppercase for consistent matching
-        draw_id_upper = draw_id.upper()
-        
-        draw = self.db.query(TournamentDraw).filter(
-            func.upper(TournamentDraw.draw_id) == draw_id_upper
-        ).first()
-        
-        if not draw:
-            return None
-        
-        # Get tournament info
-        tournament = self.db.query(Tournament).filter(
-            func.upper(Tournament.tournament_id) == func.upper(draw.tournament_id)
-        ).first()
-        
-        # Get matches for this draw (case-insensitive)
-        matches = self.db.query(TournamentMatch).filter(
-            func.upper(TournamentMatch.draw_id) == draw_id_upper
-        ).order_by(TournamentMatch.round_number, TournamentMatch.round_position).all()
-
-        if stage:
-            matches_query = matches_query.filter(TournamentMatch.stage == stage)
-        
-        matches = matches_query.order_by(
-            TournamentMatch.round_number, 
-            TournamentMatch.round_position
-        ).all()
-        
-        # Convert matches to response format
-        match_responses = []
-        for match in matches:
-            side1 = TournamentMatchParticipant(
-                participant_id=match.side1_participant_id,
-                participant_name=match.side1_participant_name,
-                draw_position=match.side1_draw_position,
-                seed_number=match.side1_seed_number,
-                school_name=match.side1_school_name,
-                school_id=match.side1_school_id,
-                player1_id=match.side1_player1_id,
-                player1_name=match.side1_player1_name,
-                player2_id=match.side1_player2_id,
-                player2_name=match.side1_player2_name
+        try:
+            # Convert draw_id to uppercase for consistent matching
+            draw_id_upper = draw_id.upper()
+            
+            draw = self.db.query(TournamentDraw).filter(
+                func.upper(TournamentDraw.draw_id) == draw_id_upper
+            ).first()
+            
+            if not draw:
+                return None
+            
+            # Get tournament info
+            tournament = self.db.query(Tournament).filter(
+                func.upper(Tournament.tournament_id) == func.upper(draw.tournament_id)
+            ).first()
+            
+            # Get matches for this draw and specific stage (case-insensitive)
+            matches_query = self.db.query(TournamentMatch).filter(
+                func.upper(TournamentMatch.draw_id) == draw_id_upper
             )
             
-            side2 = TournamentMatchParticipant(
-                participant_id=match.side2_participant_id,
-                participant_name=match.side2_participant_name,
-                draw_position=match.side2_draw_position,
-                seed_number=match.side2_seed_number,
-                school_name=match.side2_school_name,
-                school_id=match.side2_school_id,
-                player1_id=match.side2_player1_id,
-                player1_name=match.side2_player1_name,
-                player2_id=match.side2_player2_id,
-                player2_name=match.side2_player2_name
-            )
+            # Filter by stage if provided
+            if stage:
+                matches_query = matches_query.filter(TournamentMatch.stage == stage)
             
-            match_response = TournamentMatchResponse(
+            matches = matches_query.order_by(
+                TournamentMatch.round_number, 
+                TournamentMatch.round_position
+            ).all()
+            
+            # Convert matches to response format
+            match_responses = []
+            for match in matches:
+                side1 = TournamentMatchParticipant(
+                    participant_id=match.side1_participant_id,
+                    participant_name=match.side1_participant_name,
+                    draw_position=match.side1_draw_position,
+                    seed_number=match.side1_seed_number,
+                    school_name=match.side1_school_name,
+                    school_id=match.side1_school_id,
+                    player1_id=match.side1_player1_id,
+                    player1_name=match.side1_player1_name,
+                    player2_id=match.side1_player2_id,
+                    player2_name=match.side1_player2_name
+                )
+                
+                side2 = TournamentMatchParticipant(
+                    participant_id=match.side2_participant_id,
+                    participant_name=match.side2_participant_name,
+                    draw_position=match.side2_draw_position,
+                    seed_number=match.side2_seed_number,
+                    school_name=match.side2_school_name,
+                    school_id=match.side2_school_id,
+                    player1_id=match.side2_player1_id,
+                    player1_name=match.side2_player1_name,
+                    player2_id=match.side2_player2_id,
+                    player2_name=match.side2_player2_name
+                )
+                
+                # Fix the scheduled_time conversion for the datetime issue
+                scheduled_time_fixed = None
+                if match.scheduled_time is not None:
+                    if match.scheduled_date and hasattr(match.scheduled_time, 'hour'):
+                        # It's a time object, combine with date
+                        from datetime import datetime, time
+                        scheduled_time_fixed = datetime.combine(match.scheduled_date, match.scheduled_time)
+                    else:
+                        # It's already a datetime or None
+                        scheduled_time_fixed = match.scheduled_time
+                
+                match_response = TournamentMatchResponse(
                 id=match.id,
                 match_up_id=match.match_up_id,
                 draw_id=match.draw_id,
@@ -338,80 +351,136 @@ class TournamentDrawService:
                 winner_participant_name=match.winner_participant_name,
                 score_side1=match.score_side1,
                 score_side2=match.score_side2,
-                scheduled_date=match.scheduled_date,
-                # Fix the scheduled_time conversion:
-                scheduled_time=None if match.scheduled_time is None else (
-                    datetime.combine(match.scheduled_date, match.scheduled_time) 
-                    if match.scheduled_date and isinstance(match.scheduled_time, time) 
-                    else match.scheduled_time
-                ),
+                scheduled_date=None,  # Set to None for now
+                scheduled_time=None,  # Set to None for now
                 venue_name=match.venue_name,
                 created_at_api=match.created_at_api,
                 updated_at_api=match.updated_at_api,
                 created_at=match.created_at,
                 updated_at=match.updated_at
             )
-            match_responses.append(match_response)
-        
-        # Calculate statistics
-        total_matches = len(matches)
-        completed_matches = len([m for m in matches if m.match_status == "COMPLETED"])
-        scheduled_matches = len([m for m in matches if m.match_status == "SCHEDULED"])
-        
-        # Count unique participants
-        participants = set()
-        for match in matches:
-            if match.side1_participant_id:
-                participants.add(match.side1_participant_id)
-            if match.side2_participant_id:
-                participants.add(match.side2_participant_id)
-        
-        tournament_info = None
-        if tournament:
-            tournament_info = TournamentInfo(
-                tournament_id=tournament.tournament_id,
-                name=tournament.name,
-                start_date_time=tournament.start_date_time,
-                end_date_time=tournament.end_date_time,
-                location_name=tournament.location_name,
-                organization_name=tournament.organization_name,
-                tournament_type=tournament.tournament_type
+                match_responses.append(match_response)
+            
+            # Calculate statistics
+            total_matches = len(matches)
+            completed_matches = len([m for m in matches if m.match_status == "COMPLETED"])
+            scheduled_matches = len([m for m in matches if m.match_status == "SCHEDULED"])
+            
+            # Count unique participants
+            participants = set()
+            for match in matches:
+                if match.side1_participant_id:
+                    participants.add(match.side1_participant_id)
+                if match.side2_participant_id:
+                    participants.add(match.side2_participant_id)
+            
+            tournament_info = None
+            if tournament:
+                tournament_info = TournamentInfo(
+                    tournament_id=tournament.tournament_id,
+                    name=tournament.name,
+                    start_date_time=tournament.start_date_time,
+                    end_date_time=tournament.end_date_time,
+                    location_name=tournament.location_name,
+                    organization_name=tournament.organization_name,
+                    tournament_type=tournament.tournament_type
+                )
+            
+            return TournamentDrawDetails(
+                draw_id=draw.draw_id,
+                tournament_id=draw.tournament_id,
+                event_id=draw.event_id,
+                draw_name=draw.draw_name,
+                draw_type=draw.draw_type,
+                draw_size=draw.draw_size,
+                event_type=draw.event_type,
+                gender=draw.gender,
+                draw_completed=draw.draw_completed,
+                draw_active=draw.draw_active,
+                match_up_format=draw.match_up_format,
+                updated_at_api=draw.updated_at_api,
+                created_at=draw.created_at,
+                updated_at=draw.updated_at,
+                tournament=tournament_info,
+                matches=match_responses,
+                total_matches=total_matches,
+                completed_matches=completed_matches,
+                scheduled_matches=scheduled_matches,
+                participants_count=len(participants)
             )
-        
-        return TournamentDrawDetails(
-            draw_id=draw.draw_id,
-            tournament_id=draw.tournament_id,
-            event_id=draw.event_id,
-            draw_name=draw.draw_name,
-            draw_type=draw.draw_type,
-            draw_size=draw.draw_size,
-            event_type=draw.event_type,
-            gender=draw.gender,
-            draw_completed=draw.draw_completed,
-            draw_active=draw.draw_active,
-            match_up_format=draw.match_up_format,
-            updated_at_api=draw.updated_at_api,
-            created_at=draw.created_at,
-            updated_at=draw.updated_at,
-            tournament=tournament_info,
-            matches=match_responses,
-            total_matches=total_matches,
-            completed_matches=completed_matches,
-            scheduled_matches=scheduled_matches,
-            participants_count=len(participants)
-        )
+            
+        except Exception as e:
+            print(f"Error in get_draw_details for draw {draw_id}, stage {stage}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def get_tournament_draws(self, tournament_id: str) -> List[TournamentDrawResponse]:
-        """Get all draws for a specific tournament"""
+        """Get all draws for a specific tournament, separated by stage"""
         
         # Convert tournament_id to uppercase for consistent matching
         tournament_id_upper = tournament_id.upper()
         
-        draws = self.db.query(TournamentDraw).filter(
+        # Get base draws
+        base_draws = self.db.query(TournamentDraw).filter(
             func.upper(TournamentDraw.tournament_id) == tournament_id_upper
         ).order_by(TournamentDraw.gender, TournamentDraw.event_type).all()
         
-        return [TournamentDrawResponse.from_orm(draw) for draw in draws]
+        draw_responses = []
+        
+        for base_draw in base_draws:
+            # Get all unique stages for this draw
+            stages = self.db.query(TournamentMatch.stage).filter(
+                func.upper(TournamentMatch.draw_id) == func.upper(base_draw.draw_id),
+                TournamentMatch.stage.isnot(None)
+            ).distinct().all()
+            
+            stage_list = [stage[0] for stage in stages if stage[0]]
+            
+            if not stage_list:
+                # No stages found, return the base draw
+                draw_responses.append(TournamentDrawResponse.from_orm(base_draw))
+            else:
+                # Create a separate draw response for each stage
+                for stage in stage_list:
+                    # Count matches for this stage
+                    stage_match_count = self.db.query(func.count(TournamentMatch.id)).filter(
+                        func.upper(TournamentMatch.draw_id) == func.upper(base_draw.draw_id),
+                        TournamentMatch.stage == stage
+                    ).scalar() or 0
+                    
+                    # Create modified draw name to include stage
+                    stage_suffix = ""
+                    if stage.upper() == "CONSOLATION":
+                        stage_suffix = " - Consolation"
+                    elif stage.upper() == "QUALIFYING":
+                        stage_suffix = " - Qualifying"
+                    elif stage.upper() == "MAIN":
+                        stage_suffix = ""  # Main draw doesn't need suffix
+                    else:
+                        stage_suffix = f" - {stage.title()}"
+                    
+                    # Create a new draw response with modified name and size
+                    draw_response = TournamentDrawResponse(
+                        draw_id=base_draw.draw_id,
+                        tournament_id=base_draw.tournament_id,
+                        event_id=base_draw.event_id,
+                        draw_name=base_draw.draw_name + stage_suffix,
+                        draw_type=base_draw.draw_type,
+                        draw_size=stage_match_count * 2,  # Rough estimate
+                        event_type=base_draw.event_type,
+                        gender=base_draw.gender,
+                        draw_completed=base_draw.draw_completed,
+                        draw_active=base_draw.draw_active,
+                        match_up_format=base_draw.match_up_format,
+                        updated_at_api=base_draw.updated_at_api,
+                        created_at=base_draw.created_at,
+                        updated_at=base_draw.updated_at,
+                        stage=stage  # Add stage to the response
+                    )
+                    draw_responses.append(draw_response)
+        
+        return draw_responses
 
     def get_draw_bracket(self, draw_id: str) -> Optional[TournamentBracket]:
         """Get bracket visualization data for a draw"""
