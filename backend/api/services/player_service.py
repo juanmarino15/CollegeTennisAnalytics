@@ -537,8 +537,16 @@ class PlayerService:
         print(f"DEBUG: Service method called with params: query={query}, gender={gender}, season_name={season_name}")
         
         try:
-            # Build the SQL query
-            sql = "SELECT * FROM player_search_view WHERE 1=1"
+            # Build the SQL query with DISTINCT ON to get only one row per player
+            sql = """
+            SELECT DISTINCT ON (person_id) 
+                person_id, tennis_id, first_name, last_name, avatar_url,
+                team_id, team_name, gender, conference, division,
+                season_name, season_id, school_name, school_id,
+                wtn_singles, wtn_doubles
+            FROM player_search_view 
+            WHERE 1=1
+            """
             params = {}
             
             # Apply text search filter if provided
@@ -554,7 +562,6 @@ class PlayerService:
             
             # Apply gender filter if provided
             if gender:
-                # Handle both 'MALE'/'FEMALE' and 'M'/'F' formats
                 if gender.upper() in ['MALE', 'M']:
                     sql += " AND (UPPER(gender) = 'MALE' OR UPPER(gender) = 'M')"
                 elif gender.upper() in ['FEMALE', 'F']:
@@ -565,11 +572,12 @@ class PlayerService:
             
             # Apply season filter if provided  
             if season_name:
-                sql += " AND season_name = :season_name"
+                sql += " AND (season_name = :season_name OR season_name LIKE :season_pattern)"
                 params['season_name'] = season_name
+                params['season_pattern'] = f"%{season_name}%"
             
-            # Add a reasonable limit and order by
-            sql += " ORDER BY last_name, first_name"
+            # Order by person_id to support DISTINCT ON, then by season to get most recent
+            sql += " ORDER BY person_id, season_name DESC NULLS LAST LIMIT 100"
             
             print(f"DEBUG: Executing SQL: {sql}")
             print(f"DEBUG: With params: {params}")
@@ -579,18 +587,9 @@ class PlayerService:
             
             print(f"DEBUG: Query returned {len(result)} rows")
             
-            # If no results, let's debug what's in the view
-            if len(result) == 0:
-                debug_sql = "SELECT COUNT(*) as total, gender, season_name FROM player_search_view GROUP BY gender, season_name"
-                debug_result = self.db.execute(text(debug_sql)).fetchall()
-                print(f"DEBUG: View contents summary:")
-                for row in debug_result:
-                    print(f"  Gender: {row.gender}, Season: {row.season_name}, Count: {row.total}")
-            
             # Process results
             player_results = []
             for row in result:
-                # Convert SQLAlchemy Row to dict
                 row_dict = dict(row._mapping)
                 player_results.append(row_dict)
             
