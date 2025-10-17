@@ -547,19 +547,29 @@ class PlayerService:
                     LOWER(first_name) LIKE :search_term OR
                     LOWER(last_name) LIKE :search_term OR
                     LOWER(team_name) LIKE :search_term OR
-                    LOWER(school_name) LIKE :search_term
+                    LOWER(school_name) LIKE :search_term OR
+                    LOWER(CONCAT(first_name, ' ', last_name)) LIKE :search_term
                 )"""
                 params['search_term'] = f"%{query.lower()}%"
             
             # Apply gender filter if provided
             if gender:
-                sql += " AND UPPER(gender) = :gender"
-                params['gender'] = gender.upper()
+                # Handle both 'MALE'/'FEMALE' and 'M'/'F' formats
+                if gender.upper() in ['MALE', 'M']:
+                    sql += " AND (UPPER(gender) = 'MALE' OR UPPER(gender) = 'M')"
+                elif gender.upper() in ['FEMALE', 'F']:
+                    sql += " AND (UPPER(gender) = 'FEMALE' OR UPPER(gender) = 'F')"
+                else:
+                    sql += " AND UPPER(gender) = :gender"
+                    params['gender'] = gender.upper()
             
-            # Apply season filter if provided
+            # Apply season filter if provided  
             if season_name:
                 sql += " AND season_name = :season_name"
                 params['season_name'] = season_name
+            
+            # Add a reasonable limit and order by
+            sql += " ORDER BY last_name, first_name"
             
             print(f"DEBUG: Executing SQL: {sql}")
             print(f"DEBUG: With params: {params}")
@@ -568,6 +578,14 @@ class PlayerService:
             result = self.db.execute(text(sql), params).fetchall()
             
             print(f"DEBUG: Query returned {len(result)} rows")
+            
+            # If no results, let's debug what's in the view
+            if len(result) == 0:
+                debug_sql = "SELECT COUNT(*) as total, gender, season_name FROM player_search_view GROUP BY gender, season_name"
+                debug_result = self.db.execute(text(debug_sql)).fetchall()
+                print(f"DEBUG: View contents summary:")
+                for row in debug_result:
+                    print(f"  Gender: {row.gender}, Season: {row.season_name}, Count: {row.total}")
             
             # Process results
             player_results = []
@@ -584,4 +602,3 @@ class PlayerService:
             import traceback
             print(traceback.format_exc())
             raise
-    
