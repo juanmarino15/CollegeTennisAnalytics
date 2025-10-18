@@ -591,7 +591,7 @@ class PlayerService:
                 params['season_pattern'] = f"%{season_name}%"
             
             # Order by person_id to support DISTINCT ON, then by season to get most recent
-            sql += " ORDER BY person_id, season_name DESC NULLS LAST LIMIT 100"
+            sql += " ORDER BY person_id, season_name DESC NULLS LAST LIMIT 500"
             
             print(f"DEBUG: Executing SQL: {sql}")
             print(f"DEBUG: With params: {params}")
