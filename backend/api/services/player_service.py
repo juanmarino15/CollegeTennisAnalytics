@@ -115,8 +115,7 @@ class PlayerService:
         
         upper_player_id = player_id.upper()
         
-        # Log for debugging
-        print(f"Looking up team for player_id: {player_id}, upper_player_id: {upper_player_id}")
+        print(f"🔍 Looking up team for player_id: {player_id}, season: {season}")
         
         # Get roster entry for player
         roster_query = self.db.query(PlayerRoster).filter(
@@ -126,22 +125,42 @@ class PlayerService:
         # Add season filter if provided
         if season:
             print(f"Filtering by season: {season}")
+            
+            # Try exact match first (e.g., "2024-2025")
             season_obj = self.db.query(Season).filter(
-                Season.name.like(f"%{season}%")
+                Season.name == season
             ).first()
             
+            # If no exact match and season is just a year, try "YYYY-YYYY+1" format
+            if not season_obj and season.isdigit() and len(season) == 4:
+                next_year = str(int(season) + 1)
+                formatted_season = f"{season}-{next_year}"
+                print(f"Trying formatted season: {formatted_season}")
+                season_obj = self.db.query(Season).filter(
+                    Season.name == formatted_season
+                ).first()
+            
+            # Still no match? Try LIKE as fallback
+            if not season_obj:
+                print(f"Trying LIKE pattern: {season}-%")
+                season_obj = self.db.query(Season).filter(
+                    Season.name.like(f"{season}-%")
+                ).order_by(Season.name.desc()).first()
+            
             if season_obj:
-                print(f"Found season_id: {season_obj.id}")
+                print(f"✅ Found season: {season_obj.name} (id: {season_obj.id})")
                 roster_query = roster_query.filter(PlayerRoster.season_id == season_obj.id)
+            else:
+                print(f"⚠️ WARNING: No season found matching '{season}', will return most recent roster")
         
         # Get most recent roster if multiple found
         roster = roster_query.order_by(PlayerRoster.season_id.desc()).first()
         
         if not roster:
-            print(f"No roster entry found for player: {player_id}")
+            print(f"❌ No roster entry found for player: {player_id}")
             return None
         
-        print(f"Found roster entry with team_id: {roster.team_id} and school_id: {roster.school_id}")
+        print(f"✅ Found roster entry with team_id: {roster.team_id} and school_id: {roster.school_id}")
         
         # If we have a school_id, use that to find the team
         if roster.school_id:
@@ -151,11 +170,6 @@ class PlayerService:
             
             if school:
                 print(f"Found school: {school.name}")
-                
-                # Get the player to check gender if possible
-                player = self.db.query(Player).filter(
-                    Player.person_id == player_id
-                ).first()
                 
                 # Default to checking man_id first, then woman_id
                 if school.man_id:
