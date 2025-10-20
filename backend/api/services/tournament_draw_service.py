@@ -17,23 +17,35 @@ class TournamentDrawService:
         self.db = db
 
     def get_tournaments_list(
-        self,
-        filters: Optional[TournamentSearchFilters] = None,
-        page: int = 1,
-        page_size: int = 20,
-        sort_by: str = "start_date_time",
-        sort_order: str = "desc"
-    ) -> TournamentSearchResponse:
+    self,
+    filters: Optional[TournamentSearchFilters] = None,
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str = "start_date_time",
+    sort_order: str = "desc"
+) -> TournamentSearchResponse:
         """Get paginated list of tournaments with draw counts and event tags"""
         
         query = self.db.query(Tournament)
         
         # Apply filters
         if filters:
-            if filters.date_from:
-                query = query.filter(Tournament.start_date_time >= filters.date_from)
-            if filters.date_to:
-                query = query.filter(Tournament.end_date_time <= filters.date_to)
+            # UPDATED: Date range logic to show tournaments that OVERLAP with the selected date range
+            # A tournament overlaps if: tournament_start <= range_end AND tournament_end >= range_start
+            if filters.date_from and filters.date_to:
+                query = query.filter(
+                    and_(
+                        Tournament.start_date_time <= filters.date_to,  # Tournament starts before or during range
+                        Tournament.end_date_time >= filters.date_from   # Tournament ends during or after range
+                    )
+                )
+            elif filters.date_from:
+                # If only start date provided, show tournaments that end on or after that date
+                query = query.filter(Tournament.end_date_time >= filters.date_from)
+            elif filters.date_to:
+                # If only end date provided, show tournaments that start on or before that date
+                query = query.filter(Tournament.start_date_time <= filters.date_to)
+                
             if filters.tournament_type:
                 query = query.filter(Tournament.tournament_type == filters.tournament_type)
             if filters.location:
@@ -101,7 +113,8 @@ class TournamentDrawService:
             page_size=page_size,
             has_next=offset + page_size < total_count,
             has_previous=page > 1
-        )
+        
+            )
 
     def _get_tournament_event_tags(self, tournament_id: str) -> List[str]:
         """
@@ -143,12 +156,12 @@ class TournamentDrawService:
         return tags
 
     def search_tournaments(
-        self, 
-        query: Optional[str] = None,
-        filters: Optional[TournamentSearchFilters] = None,
-        page: int = 1,
-        page_size: int = 20
-    ) -> TournamentSearchResponse:
+    self, 
+    query: Optional[str] = None,
+    filters: Optional[TournamentSearchFilters] = None,
+    page: int = 1,
+    page_size: int = 20
+) -> TournamentSearchResponse:
         """Search tournaments by name, location, or organization"""
         
         db_query = self.db.query(Tournament)
@@ -164,10 +177,22 @@ class TournamentDrawService:
         
         # Apply additional filters
         if filters:
-            if filters.date_from:
-                db_query = db_query.filter(Tournament.start_date_time >= filters.date_from)
-            if filters.date_to:
-                db_query = db_query.filter(Tournament.end_date_time <= filters.date_to)
+            # UPDATED: Date range logic to show tournaments that OVERLAP with the selected date range
+            # A tournament overlaps if: tournament_start <= range_end AND tournament_end >= range_start
+            if filters.date_from and filters.date_to:
+                db_query = db_query.filter(
+                    and_(
+                        Tournament.start_date_time <= filters.date_to,  # Tournament starts before or during range
+                        Tournament.end_date_time >= filters.date_from   # Tournament ends during or after range
+                    )
+                )
+            elif filters.date_from:
+                # If only start date provided, show tournaments that end on or after that date
+                db_query = db_query.filter(Tournament.end_date_time >= filters.date_from)
+            elif filters.date_to:
+                # If only end date provided, show tournaments that start on or before that date
+                db_query = db_query.filter(Tournament.start_date_time <= filters.date_to)
+                
             if filters.tournament_type:
                 db_query = db_query.filter(Tournament.tournament_type == filters.tournament_type)
             if filters.division:
