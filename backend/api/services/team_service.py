@@ -166,7 +166,9 @@ class TeamService:
             .join(PlayerRoster)
             .filter(
                 func.upper(PlayerRoster.team_id) == upper_team_id,
-                PlayerRoster.season_id == season.id
+                PlayerRoster.season_id == season.id,
+                PlayerRoster.active == True  
+
             )
             .all()
         )

@@ -119,7 +119,9 @@ class PlayerService:
         
         # Get roster entry for player
         roster_query = self.db.query(PlayerRoster).filter(
-            func.upper(PlayerRoster.person_id) == upper_player_id
+            func.upper(PlayerRoster.person_id) == upper_player_id,
+            PlayerRoster.active == True  
+
         )
         
         # Add season filter if provided
@@ -560,6 +562,7 @@ class PlayerService:
                 wtn_singles, wtn_doubles
             FROM player_search_view 
             WHERE 1=1
+            AND active = TRUE
             """
             params = {}
             

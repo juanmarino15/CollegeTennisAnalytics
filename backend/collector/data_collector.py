@@ -2,7 +2,7 @@
 import asyncio
 import httpx
 from datetime import datetime
-from sqlalchemy import create_engine, func, distinct
+from sqlalchemy import create_engine, func, distinct, or_, and_
 from sqlalchemy.orm import sessionmaker
 from models.models import (
     Base, Match, Team, MatchTeam, WebLink, TeamLogo, SchoolInfo, Season, 
@@ -787,7 +787,7 @@ class TennisDataCollector:
             return {}
 
     def store_team_roster(self, school_id: str, team_id: str, season_id: str):
-        """Store roster information for a team"""
+        """Store roster information for a team with active status tracking and robust error handling"""
         if not self.Session:
             raise RuntimeError("Database not initialized")
             
@@ -797,21 +797,59 @@ class TennisDataCollector:
                         
             if roster_data and 'data' in roster_data and 'getRosterMembers' in roster_data['data']:
                 players = roster_data['data']['getRosterMembers']
-                print(f"Found {len(players)} players to process")
-
+                
+                # Handle None or empty list
+                if not players:
+                    print(f"No players found for team {team_id}")
+                    return
+                    
+                print(f"Found {len(players)} players to process for team {team_id}, season {season_id}")
+                
+                # STEP 1: Mark all existing roster entries for this team/season as inactive
+                print(f"Marking existing roster entries as inactive for team {team_id}...")
+                session.query(PlayerRoster).filter(
+                    PlayerRoster.team_id == team_id,
+                    PlayerRoster.season_id == season_id
+                ).update({"active": False}, synchronize_session=False)
+                
+                session.flush()
+                
+                # STEP 2: Process each player from the API
+                active_count = 0
                 for player_info in players:
                     try:
-                        # Store or update base player info
-                        player = session.query(Player).get(player_info['personId'])
+                        # Validate required fields
+                        if not player_info or not player_info.get('personId') or not player_info.get('tennisId'):
+                            print(f"  ⚠️  Skipping player with missing IDs: {player_info}")
+                            continue
+                        
+                        # Look up player by person_id OR tennis_id
+                        player = session.query(Player).filter(
+                            or_(
+                                Player.person_id == player_info['personId'],
+                                Player.tennis_id == player_info['tennisId']
+                            )
+                        ).first()
+                        
                         if not player:
                             player = Player(person_id=player_info['personId'])
+                            print(f"  Creating new player: {player_info.get('standardGivenName', 'Unknown')} {player_info.get('standardFamilyName', 'Unknown')}")
+                        else:
+                            if player.person_id != player_info['personId']:
+                                print(
+                                    f"  ⚠️  Player tennis_id conflict: {player_info['tennisId']} "
+                                    f"exists with person_id {player.person_id}, API says {player_info['personId']}"
+                                )
+                                player_info['personId'] = player.person_id
                         
-                        player.tennis_id = player_info['tennisId']
-                        player.first_name = player_info['standardGivenName']
-                        player.last_name = player_info['standardFamilyName']
-                        player.avatar_url = player_info['avatarUrl']
+                        # Update player fields (with None checks)
+                        player.tennis_id = player_info.get('tennisId')
+                        player.first_name = player_info.get('standardGivenName', '')
+                        player.last_name = player_info.get('standardFamilyName', '')
+                        player.avatar_url = player_info.get('avatarUrl')
                         
                         session.merge(player)
+                        session.flush()
                         
                         # Create or update player season info
                         player_season = (
@@ -824,77 +862,119 @@ class TennisDataCollector:
                                 person_id=player.person_id,
                                 tennis_id=player.tennis_id,
                                 season_id=season_id,
-                                class_year=player_info['class']
+                                class_year=player_info.get('class')  # Can be None
                             )
                         else:
                             player_season.tennis_id = player.tennis_id
-                            player_season.class_year = player_info['class']
+                            player_season.class_year = player_info.get('class')
                         
                         session.merge(player_season)
 
                         # Create or update roster entry
                         roster_entry = (
                             session.query(PlayerRoster)
-                            .filter_by(person_id=player.person_id, season_id=season_id)
+                            .filter_by(
+                                person_id=player.person_id, 
+                                season_id=season_id,
+                                team_id=team_id
+                            )
                             .first()
                         )
+                        
                         if not roster_entry:
                             roster_entry = PlayerRoster(
                                 person_id=player.person_id,
                                 tennis_id=player.tennis_id,
                                 season_id=season_id,
                                 team_id=team_id,
-                                school_id=school_id
+                                school_id=school_id,
+                                active=True
                             )
+                            print(f"  Creating new roster entry for {player.first_name} {player.last_name}")
                         else:
                             roster_entry.tennis_id = player.tennis_id
                             roster_entry.team_id = team_id
                             roster_entry.school_id = school_id
+                            roster_entry.active = True
+                            print(f"  Reactivating roster entry for {player.first_name} {player.last_name}")
                         
                         session.merge(roster_entry)
+                        active_count += 1
                         
-                        # Store WTN numbers
-                        if player_info['worldTennisNumbers']:
-                            for wtn in player_info['worldTennisNumbers']:
+                        # Store WTN numbers - FIXED: Handle None properly
+                        wtn_numbers = player_info.get('worldTennisNumbers')
+                        if wtn_numbers and isinstance(wtn_numbers, list):
+                            for wtn_data in wtn_numbers:
+                                if not wtn_data or not wtn_data.get('type'):
+                                    continue  # Skip invalid WTN data
+                                    
                                 wtn_entry = (
                                     session.query(PlayerWTN)
                                     .filter_by(
                                         person_id=player.person_id,
                                         season_id=season_id,
-                                        wtn_type=wtn['type']
+                                        wtn_type=wtn_data['type']
                                     )
                                     .first()
                                 )
+                                
                                 if not wtn_entry:
                                     wtn_entry = PlayerWTN(
                                         person_id=player.person_id,
                                         tennis_id=player.tennis_id,
                                         season_id=season_id,
-                                        wtn_type=wtn['type'],
-                                        confidence=wtn['confidence'],
-                                        tennis_number=wtn['tennisNumber'],
-                                        is_ranked=wtn['isRanked']
+                                        wtn_type=wtn_data['type'],
+                                        confidence=wtn_data.get('confidence'),
+                                        tennis_number=wtn_data.get('tennisNumber'),
+                                        is_ranked=wtn_data.get('isRanked', False)
                                     )
                                 else:
                                     wtn_entry.tennis_id = player.tennis_id
-                                    wtn_entry.confidence = wtn['confidence']
-                                    wtn_entry.tennis_number = wtn['tennisNumber']
-                                    wtn_entry.is_ranked = wtn['isRanked']
+                                    wtn_entry.confidence = wtn_data.get('confidence')
+                                    wtn_entry.tennis_number = wtn_data.get('tennisNumber')
+                                    wtn_entry.is_ranked = wtn_data.get('isRanked', False)
                                 
                                 session.merge(wtn_entry)
                         
-                        session.commit()
-                        print(f"Successfully stored player: {player.first_name} {player.last_name} for season {season_id}")
-                        
                     except Exception as e:
-                        print(player_info)
-                        print(f"Error processing player {player_info.get('standardGivenName', '')} {player_info.get('standardFamilyName', '')}: {e}")
+                        print(
+                            f"Error processing player {player_info.get('standardGivenName', 'Unknown')} "
+                            f"{player_info.get('standardFamilyName', 'Unknown')}: {e}"
+                        )
+                        import traceback
+                        print(traceback.format_exc())
+                        # Rollback this player only
                         session.rollback()
+                        # Re-mark entries as inactive since rollback undid it
+                        session.query(PlayerRoster).filter(
+                            PlayerRoster.team_id == team_id,
+                            PlayerRoster.season_id == season_id
+                        ).update({"active": False}, synchronize_session=False)
+                        session.flush()
                         continue
-                        
+                
+                # Commit all changes
+                session.commit()
+                print(f"✅ Successfully updated roster for team {team_id}")
+                print(f"   Total players processed: {active_count}")
+                
+                # Log inactive count
+                inactive_count = session.query(PlayerRoster).filter(
+                    PlayerRoster.team_id == team_id,
+                    PlayerRoster.season_id == season_id,
+                    PlayerRoster.active == False
+                ).count()
+                print(f"   Inactive roster entries: {inactive_count}")
+                
+            else:
+                print(f"No roster data found for team {team_id}")
+                
         except Exception as e:
-            print(f"Error processing roster: {e}")
+            print(f"Error storing roster: {e}")
+            import traceback
+            print(traceback.format_exc())
             session.rollback()
+            raise
         finally:
             session.close()
 

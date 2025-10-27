@@ -72,6 +72,7 @@ class PlayerMatchesCollector:
             FROM player_rosters pr
             JOIN season s ON pr.season_id = s.id
             WHERE UPPER(pr.team_id) IN (SELECT team_id FROM recent_teams)
+            AND pr.active = TRUE  -- ← ADD THIS LINE
             """)
             
             print("Executing SQL query to get recently active players")
@@ -140,7 +141,9 @@ class PlayerMatchesCollector:
                 session.query(PlayerRoster.person_id)
                 .filter(
                     func.upper(PlayerRoster.team_id).in_([tid for tid in active_teams]),
-                    PlayerRoster.season_id == season_id
+                    PlayerRoster.season_id == season_id,
+                    PlayerRoster.active == True 
+
                 )
                 .distinct()
             ).all()

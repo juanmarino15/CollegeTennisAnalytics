@@ -158,8 +158,9 @@ class PlayerRoster(Base):
     person_id = Column(String, ForeignKey('players.person_id'), primary_key=True)
     tennis_id = Column(String)
     season_id = Column(String, ForeignKey('seasons.id'), primary_key=True)
-    team_id = Column(String)  # This is man_id/woman_id from school_info
+    team_id = Column(String,primary_key=True)  
     school_id = Column(String, ForeignKey('school_info.id'))
+    active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
