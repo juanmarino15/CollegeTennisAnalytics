@@ -154,8 +154,25 @@ class TeamService:
             else:
                 return []
 
-        # Get season_id for the year
-        season = self.db.query(Season).filter(Season.name.ilike(f"%{year}%")).first()
+        # Get season_id for the year - handle both "2025" and "2025-2026" formats
+        season = None
+        
+        if year and len(year) == 4 and year.isdigit():
+            # Single year like "2025" - look for "2025-2026" format (season starting in that year)
+            next_year = str(int(year) + 1)
+            formatted_season = f"{year}-{next_year}"
+            print(f"🔍 Looking for season: {formatted_season}")
+            season = self.db.query(Season).filter(Season.name == formatted_season).first()
+            
+            # Fallback to LIKE if exact match not found
+            if not season:
+                print(f"Exact match not found, trying LIKE: {year}-%")
+                season = self.db.query(Season).filter(
+                    Season.name.like(f"{year}-%")
+                ).order_by(Season.name.desc()).first()
+        else:
+            # Already in full format like "2025-2026"
+            season = self.db.query(Season).filter(Season.name == year).first()
         
         if not season:
             return []
@@ -167,8 +184,7 @@ class TeamService:
             .filter(
                 func.upper(PlayerRoster.team_id) == upper_team_id,
                 PlayerRoster.season_id == season.id,
-                PlayerRoster.active == True  
-
+                PlayerRoster.active == True  # ← ADDED THIS
             )
             .all()
         )
