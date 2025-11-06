@@ -720,7 +720,8 @@ class PlayerService:
             return []
         
         seasons = self.db.query(Season).filter(
-            Season.id.in_(season_ids)
+            Season.id.in_(season_ids),
+            Season.name != '2022-2023'  # Exclude 2022-2023 season
         ).order_by(Season.name.desc()).all()
         
         # Convert to dictionaries
