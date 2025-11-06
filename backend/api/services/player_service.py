@@ -617,7 +617,7 @@ class PlayerService:
             import traceback
             print(traceback.format_exc())
             raise
-        
+
     def get_player_seasons(self, player_id: str, include_current: bool = True):
         """
         Get seasons where the player has data (roster, WTN, or matches).
@@ -667,10 +667,17 @@ class PlayerService:
         for match in player_matches:
             if match.start_time:
                 match_date = match.start_time
+                # Convert to date for comparison
+                match_date_only = match_date.date() if hasattr(match_date, 'date') else match_date
+                
                 # Find which season this match belongs to
                 for season in all_seasons:
                     if season.start_date and season.end_date:
-                        if season.start_date <= match_date.date() <= season.end_date:
+                        # Ensure both sides are date objects for comparison
+                        season_start = season.start_date if isinstance(season.start_date, type(match_date_only)) else season.start_date.date()
+                        season_end = season.end_date if isinstance(season.end_date, type(match_date_only)) else season.end_date.date()
+                        
+                        if season_start <= match_date_only <= season_end:
                             season_ids.add(season.id)
                             break
                     # Fallback: use academic year logic (Aug 1 to July 31)
@@ -680,7 +687,7 @@ class PlayerService:
                             season_year = int(season.name.split('-')[0])
                             season_start = datetime(season_year, 8, 1).date()
                             season_end = datetime(season_year + 1, 7, 31).date()
-                            if season_start <= match_date.date() <= season_end:
+                            if season_start <= match_date_only <= season_end:
                                 season_ids.add(season.id)
                                 break
                         except (ValueError, IndexError):
