@@ -617,6 +617,7 @@ class PlayerService:
             import traceback
             print(traceback.format_exc())
             raise
+        
     def get_player_seasons(self, player_id: str, include_current: bool = True):
         """
         Get seasons where the player has data (roster, WTN, or matches).
@@ -634,47 +635,86 @@ class PlayerService:
         
         upper_player_id = player_id.upper()
         
+        # Collect season IDs where player has data
+        season_ids = set()
+        
         # Get seasons where player has roster entries
-        roster_seasons = self.db.query(Season).join(
-            PlayerRoster, Season.id == PlayerRoster.season_id
-        ).filter(
+        roster_season_ids = self.db.query(PlayerRoster.season_id).filter(
             func.upper(PlayerRoster.person_id) == upper_player_id
-        ).distinct()
+        ).distinct().all()
+        season_ids.update([s[0] for s in roster_season_ids if s[0]])
         
         # Get seasons where player has WTN data
-        wtn_seasons = self.db.query(Season).join(
-            PlayerWTN, Season.id == PlayerWTN.season_id
-        ).filter(
+        wtn_season_ids = self.db.query(PlayerWTN.season_id).filter(
             func.upper(PlayerWTN.person_id) == upper_player_id
-        ).distinct()
+        ).distinct().all()
+        season_ids.update([s[0] for s in wtn_season_ids if s[0]])
         
-        # Get seasons where player has match data (via PlayerMatchParticipant)
-        match_seasons = self.db.query(Season).join(
-            PlayerMatch, Season.id == PlayerMatch.season_id
-        ).join(
+        # Get seasons where player has match data
+        # Since PlayerMatch doesn't have season_id, we need to:
+        # 1. Get all match dates for this player
+        # 2. Map them to seasons based on date ranges
+        player_matches = self.db.query(PlayerMatch.start_time).join(
             PlayerMatchParticipant, PlayerMatch.id == PlayerMatchParticipant.match_id
         ).filter(
             func.upper(PlayerMatchParticipant.person_id) == upper_player_id
-        ).distinct()
+        ).all()
         
-        # Combine all seasons using union
-        all_seasons_query = roster_seasons.union(wtn_seasons, match_seasons)
+        # Get all seasons to map dates to season IDs
+        all_seasons = self.db.query(Season).all()
         
-        # If include_current is True, also get the active season
+        # Map match dates to seasons
+        for match in player_matches:
+            if match.start_time:
+                match_date = match.start_time
+                # Find which season this match belongs to
+                for season in all_seasons:
+                    if season.start_date and season.end_date:
+                        if season.start_date <= match_date.date() <= season.end_date:
+                            season_ids.add(season.id)
+                            break
+                    # Fallback: use academic year logic (Aug 1 to July 31)
+                    elif season.name:
+                        try:
+                            # Parse season name like "2024-2025" or "2024"
+                            season_year = int(season.name.split('-')[0])
+                            season_start = datetime(season_year, 8, 1).date()
+                            season_end = datetime(season_year + 1, 7, 31).date()
+                            if season_start <= match_date.date() <= season_end:
+                                season_ids.add(season.id)
+                                break
+                        except (ValueError, IndexError):
+                            continue
+        
+        # If include_current is True, add the active season
         if include_current:
             active_season = self.db.query(Season).filter(
                 Season.status == 'ACTIVE'
             ).first()
             
             if active_season:
-                # Union with active season
-                active_season_query = self.db.query(Season).filter(
-                    Season.id == active_season.id
-                )
-                all_seasons_query = all_seasons_query.union(active_season_query)
+                season_ids.add(active_season.id)
         
-        # Execute query and order by name descending (most recent first)
-        seasons = all_seasons_query.order_by(Season.name.desc()).all()
+        # Fetch all seasons that are in our season_ids set
+        if not season_ids:
+            # If no seasons found but include_current is True, return just active season
+            if include_current:
+                active_season = self.db.query(Season).filter(
+                    Season.status == 'ACTIVE'
+                ).first()
+                if active_season:
+                    return [{
+                        "id": active_season.id,
+                        "name": active_season.name,
+                        "status": active_season.status,
+                        "start_date": str(active_season.start_date) if active_season.start_date else None,
+                        "end_date": str(active_season.end_date) if active_season.end_date else None
+                    }]
+            return []
+        
+        seasons = self.db.query(Season).filter(
+            Season.id.in_(season_ids)
+        ).order_by(Season.name.desc()).all()
         
         # Convert to dictionaries
         return [
