@@ -137,3 +137,23 @@ def get_player_match_results(
     service = PlayerService(db)
     return service.get_player_match_results(player_id, season=season)
 
+@router.get("/{player_id}/seasons")
+def get_player_seasons(
+    player_id: str,
+    include_current: bool = True,
+    db: Session = Depends(get_db)
+):
+    """
+    Get seasons where the player has data (roster, WTN, or matches).
+    Always includes the current/active season by default.
+    
+    Args:
+        player_id: The player's person_id
+        include_current: If True (default), always include the current/active season
+    
+    Returns:
+        List of seasons where player has data
+    """
+    service = PlayerService(db)
+    return service.get_player_seasons(player_id, include_current=include_current)
+

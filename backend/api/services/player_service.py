@@ -69,7 +69,6 @@ class PlayerService:
             return self._player_to_dict(player) if player else None
         return None
 
-    # Update the get_player_wtn method in player_service.py to support season filtering
 
     def get_player_wtn(self, player_id: str, season: Optional[str] = None):
         """Get World Tennis Number (WTN) ratings for a player, optionally filtered by season"""
@@ -618,3 +617,73 @@ class PlayerService:
             import traceback
             print(traceback.format_exc())
             raise
+    def get_player_seasons(self, player_id: str, include_current: bool = True):
+        """
+        Get seasons where the player has data (roster, WTN, or matches).
+        Optionally always include the current active season regardless of data.
+        
+        Args:
+            player_id: The player's person_id
+            include_current: If True, always include the current/active season
+        
+        Returns:
+            List of season dictionaries with id, name, status
+        """
+        if not player_id:
+            return []
+        
+        upper_player_id = player_id.upper()
+        
+        # Get seasons where player has roster entries
+        roster_seasons = self.db.query(Season).join(
+            PlayerRoster, Season.id == PlayerRoster.season_id
+        ).filter(
+            func.upper(PlayerRoster.person_id) == upper_player_id
+        ).distinct()
+        
+        # Get seasons where player has WTN data
+        wtn_seasons = self.db.query(Season).join(
+            PlayerWTN, Season.id == PlayerWTN.season_id
+        ).filter(
+            func.upper(PlayerWTN.person_id) == upper_player_id
+        ).distinct()
+        
+        # Get seasons where player has match data (via PlayerMatchParticipant)
+        match_seasons = self.db.query(Season).join(
+            PlayerMatch, Season.id == PlayerMatch.season_id
+        ).join(
+            PlayerMatchParticipant, PlayerMatch.id == PlayerMatchParticipant.match_id
+        ).filter(
+            func.upper(PlayerMatchParticipant.person_id) == upper_player_id
+        ).distinct()
+        
+        # Combine all seasons using union
+        all_seasons_query = roster_seasons.union(wtn_seasons, match_seasons)
+        
+        # If include_current is True, also get the active season
+        if include_current:
+            active_season = self.db.query(Season).filter(
+                Season.status == 'ACTIVE'
+            ).first()
+            
+            if active_season:
+                # Union with active season
+                active_season_query = self.db.query(Season).filter(
+                    Season.id == active_season.id
+                )
+                all_seasons_query = all_seasons_query.union(active_season_query)
+        
+        # Execute query and order by name descending (most recent first)
+        seasons = all_seasons_query.order_by(Season.name.desc()).all()
+        
+        # Convert to dictionaries
+        return [
+            {
+                "id": season.id,
+                "name": season.name,
+                "status": season.status,
+                "start_date": str(season.start_date) if season.start_date else None,
+                "end_date": str(season.end_date) if season.end_date else None
+            }
+            for season in seasons
+        ]
