@@ -620,7 +620,7 @@ class PlayerService:
 
     def get_player_seasons(self, player_id: str, include_current: bool = True):
         """
-        Get seasons where the player has data (roster, WTN, or matches).
+        Get seasons where the player has data (roster, WTN).
         Optionally always include the current active season regardless of data.
         
         Args:
@@ -650,49 +650,6 @@ class PlayerService:
         ).distinct().all()
         season_ids.update([s[0] for s in wtn_season_ids if s[0]])
         
-        # Get seasons where player has match data
-        # Since PlayerMatch doesn't have season_id, we need to:
-        # 1. Get all match dates for this player
-        # 2. Map them to seasons based on date ranges
-        player_matches = self.db.query(PlayerMatch.start_time).join(
-            PlayerMatchParticipant, PlayerMatch.id == PlayerMatchParticipant.match_id
-        ).filter(
-            func.upper(PlayerMatchParticipant.person_id) == upper_player_id
-        ).all()
-        
-        # Get all seasons to map dates to season IDs
-        all_seasons = self.db.query(Season).all()
-        
-        # Map match dates to seasons
-        for match in player_matches:
-            if match.start_time:
-                match_date = match.start_time
-                # Convert to date for comparison
-                match_date_only = match_date.date() if hasattr(match_date, 'date') else match_date
-                
-                # Find which season this match belongs to
-                for season in all_seasons:
-                    if season.start_date and season.end_date:
-                        # Ensure both sides are date objects for comparison
-                        season_start = season.start_date if isinstance(season.start_date, type(match_date_only)) else season.start_date.date()
-                        season_end = season.end_date if isinstance(season.end_date, type(match_date_only)) else season.end_date.date()
-                        
-                        if season_start <= match_date_only <= season_end:
-                            season_ids.add(season.id)
-                            break
-                    # Fallback: use academic year logic (Aug 1 to July 31)
-                    elif season.name:
-                        try:
-                            # Parse season name like "2024-2025" or "2024"
-                            season_year = int(season.name.split('-')[0])
-                            season_start = datetime(season_year, 8, 1).date()
-                            season_end = datetime(season_year + 1, 7, 31).date()
-                            if season_start <= match_date_only <= season_end:
-                                season_ids.add(season.id)
-                                break
-                        except (ValueError, IndexError):
-                            continue
-        
         # If include_current is True, add the active season
         if include_current:
             active_season = self.db.query(Season).filter(
@@ -709,7 +666,7 @@ class PlayerService:
                 active_season = self.db.query(Season).filter(
                     Season.status == 'ACTIVE'
                 ).first()
-                if active_season:
+                if active_season and active_season.name != '2022-2023':
                     return [{
                         "id": active_season.id,
                         "name": active_season.name,
