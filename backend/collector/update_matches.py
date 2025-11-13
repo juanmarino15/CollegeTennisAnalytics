@@ -1055,16 +1055,24 @@ class MatchUpdatesService:
             session.close()
 
 
-    def store_team_roster(self, school_id: str, team_id: str, season_id: str):
-        """Store roster information for a team with active status tracking and robust error handling"""
-        if not self.Session:
-            raise RuntimeError("Database not initialized")
-            
-        session = self.Session()
-        try:
-            roster_data = self.fetch_roster_members(team_id, season_id)
-                        
-            if roster_data and 'data' in roster_data and 'getRosterMembers' in roster_data['data']:
+        def store_team_roster(self, school_id: str, team_id: str, season_id: str):
+            """Store roster information for a team with active status tracking and robust error handling"""
+            if not self.Session:
+                raise RuntimeError("Database not initialized")
+                
+            session = self.Session()
+            try:
+                roster_data = self.fetch_roster_members(team_id, season_id)
+                
+                # FIXED: Check if data exists properly
+                if not roster_data or 'data' not in roster_data:
+                    logging.warning(f"No roster data returned for team {team_id}")
+                    return
+                
+                if not roster_data['data'] or 'getRosterMembers' not in roster_data['data']:
+                    logging.warning(f"Invalid roster data structure for team {team_id}")
+                    return
+                    
                 players = roster_data['data']['getRosterMembers']
                 
                 # Handle None or empty list
@@ -1132,7 +1140,7 @@ class MatchUpdatesService:
                                 person_id=player.person_id,
                                 tennis_id=player.tennis_id,
                                 season_id=season_id,
-                                class_year=player_info.get('class')  # Can be None
+                                class_year=player_info.get('class')
                             )
                         else:
                             player_season.tennis_id = player.tennis_id
@@ -1171,12 +1179,12 @@ class MatchUpdatesService:
                         session.merge(roster_entry)
                         active_count += 1
                         
-                        # Store WTN numbers - FIXED: Handle None properly
+                        # Store WTN numbers - Handle None properly
                         wtn_numbers = player_info.get('worldTennisNumbers')
                         if wtn_numbers and isinstance(wtn_numbers, list):
                             for wtn_data in wtn_numbers:
                                 if not wtn_data or not wtn_data.get('type'):
-                                    continue  # Skip invalid WTN data
+                                    continue
                                     
                                 wtn_entry = (
                                     session.query(PlayerWTN)
@@ -1213,9 +1221,8 @@ class MatchUpdatesService:
                         )
                         import traceback
                         logging.debug(traceback.format_exc())
-                        # Rollback this player only
                         session.rollback()
-                        # Re-mark entries as inactive since rollback undid it
+                        # Re-mark entries as inactive
                         session.query(PlayerRoster).filter(
                             PlayerRoster.team_id == team_id,
                             PlayerRoster.season_id == season_id
@@ -1236,17 +1243,14 @@ class MatchUpdatesService:
                 ).count()
                 logging.info(f"   Inactive roster entries: {inactive_count}")
                 
-            else:
-                logging.warning(f"No roster data found for team {team_id}")
-                
-        except Exception as e:
-            logging.error(f"Error storing roster for team {team_id}: {e}")
-            import traceback
-            logging.debug(traceback.format_exc())
-            session.rollback()
-            raise
-        finally:
-            session.close()
+            except Exception as e:
+                logging.error(f"Error storing roster for team {team_id}: {e}")
+                import traceback
+                logging.debug(traceback.format_exc())
+                session.rollback()
+                raise
+            finally:
+                session.close()
 
     def process_completed_not_catched_matches(self):
         """Process completed matches that were not caught by the initial fetch"""
