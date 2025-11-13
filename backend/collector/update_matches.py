@@ -1055,7 +1055,7 @@ class MatchUpdatesService:
             session.close()
 
 
-        def store_team_roster(self, school_id: str, team_id: str, season_id: str):
+    def store_team_roster(self, school_id: str, team_id: str, season_id: str):
             """Store roster information for a team with active status tracking and robust error handling"""
             if not self.Session:
                 raise RuntimeError("Database not initialized")
