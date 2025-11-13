@@ -108,20 +108,21 @@ class PlayerService:
         return [self._wtn_to_dict(wtn) for wtn in wtns]
 
     def get_player_team(self, player_id: str, season: Optional[str] = None):
-        """Get the team info for a player in a specific season"""
+        """Get the team info for a player in a specific season, including class year"""
         if not player_id:
             return None
         
         upper_player_id = player_id.upper()
         
-        print(f"🔍 Looking up team for player_id: {player_id}, season: {season}")
+        print(f" Looking up team for player_id: {player_id}, season: {season}")
         
         # Get roster entry for player
         roster_query = self.db.query(PlayerRoster).filter(
-            func.upper(PlayerRoster.person_id) == upper_player_id,
-            PlayerRoster.active == True  
-
+            func.upper(PlayerRoster.person_id) == upper_player_id
         )
+        
+        # Variable to store season_obj for later use in class year lookup
+        season_obj = None
         
         # Add season filter if provided
         if season:
@@ -149,19 +150,33 @@ class PlayerService:
                 ).order_by(Season.name.desc()).first()
             
             if season_obj:
-                print(f"✅ Found season: {season_obj.name} (id: {season_obj.id})")
+                print(f" Found season: {season_obj.name} (id: {season_obj.id})")
                 roster_query = roster_query.filter(PlayerRoster.season_id == season_obj.id)
             else:
-                print(f"⚠️ WARNING: No season found matching '{season}', will return most recent roster")
+                print(f"WARNING: No season found matching '{season}', will return most recent roster")
         
         # Get most recent roster if multiple found
         roster = roster_query.order_by(PlayerRoster.season_id.desc()).first()
         
         if not roster:
-            print(f"❌ No roster entry found for player: {player_id}")
+            print(f"No roster entry found for player: {player_id}")
             return None
         
-        print(f"✅ Found roster entry with team_id: {roster.team_id} and school_id: {roster.school_id}")
+        print(f" Found roster entry with team_id: {roster.team_id} and school_id: {roster.school_id}")
+        
+        # Get class year from player_seasons table
+        class_year = None
+        if season_obj:
+            player_season = self.db.query(PlayerSeason).filter(
+                func.upper(PlayerSeason.person_id) == upper_player_id,
+                PlayerSeason.season_id == season_obj.id
+            ).first()
+            
+            if player_season:
+                class_year = player_season.class_year
+                print(f"Found class year: {class_year}")
+            else:
+                print(f" No class year found for season {season_obj.name}")
         
         # If we have a school_id, use that to find the team
         if roster.school_id:
@@ -185,7 +200,8 @@ class PlayerService:
                             "team_name": team.name,
                             "abbreviation": team.abbreviation,
                             "conference": team.conference,
-                            "gender": team.gender
+                            "gender": team.gender,
+                            "class_year": class_year
                         }
                 
                 if school.woman_id:
@@ -200,7 +216,8 @@ class PlayerService:
                             "team_name": team.name,
                             "abbreviation": team.abbreviation,
                             "conference": team.conference,
-                            "gender": team.gender
+                            "gender": team.gender,
+                            "class_year": class_year
                         }
                 
                 # Fall back to school info if no team is found
@@ -208,7 +225,8 @@ class PlayerService:
                     "school_id": school.id,
                     "team_name": school.name,
                     "team_id": roster.team_id or school.man_id or school.woman_id,
-                    "conference": school.conference
+                    "conference": school.conference,
+                    "class_year": class_year
                 }
         
         # Try direct team lookup if no school or school lookup failed
@@ -224,7 +242,8 @@ class PlayerService:
                     "team_name": team.name,
                     "abbreviation": team.abbreviation,
                     "conference": team.conference,
-                    "gender": team.gender
+                    "gender": team.gender,
+                    "class_year": class_year
                 }
         
         return None
@@ -514,7 +533,7 @@ class PlayerService:
             if partner:
                 partner_name = f"{partner.given_name} {partner.family_name}"
             
-            print(vars(match))  # Shows all attributes as a dictionary
+            # print(vars(match))  # Shows all attributes as a dictionary
             # Get position from lineup
             position = 0
             if match.match_identifier in all_lineups:
@@ -620,7 +639,7 @@ class PlayerService:
 
     def get_player_seasons(self, player_id: str, include_current: bool = True):
         """
-        Get seasons where the player has data (roster, WTN).
+        Get seasons where the player has data (roster, WTN, PlayerSeason).
         Optionally always include the current active season regardless of data.
         
         Args:
@@ -649,6 +668,12 @@ class PlayerService:
             func.upper(PlayerWTN.person_id) == upper_player_id
         ).distinct().all()
         season_ids.update([s[0] for s in wtn_season_ids if s[0]])
+        
+        # Get seasons where player has PlayerSeason entries (includes class year data)
+        player_season_ids = self.db.query(PlayerSeason.season_id).filter(
+            func.upper(PlayerSeason.person_id) == upper_player_id
+        ).distinct().all()
+        season_ids.update([s[0] for s in player_season_ids if s[0]])
         
         # If include_current is True, add the active season
         if include_current:

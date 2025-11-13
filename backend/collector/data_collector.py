@@ -862,7 +862,7 @@ class TennisDataCollector:
                                 person_id=player.person_id,
                                 tennis_id=player.tennis_id,
                                 season_id=season_id,
-                                class_year=player_info.get('class')  # Can be None
+                                class_year=player_info.get('class')  
                             )
                         else:
                             player_season.tennis_id = player.tennis_id

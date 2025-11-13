@@ -29,15 +29,18 @@ class TeamService:
             "updated_at": logo.updated_at
         }
 
-    def _player_to_dict(self, player):
+    def _player_to_dict(self, player, class_year=None):
         """Convert Player model to dictionary"""
-        return {
+        result = {
             "person_id": player.person_id,
             "tennis_id": player.tennis_id,
             "first_name": player.first_name,
             "last_name": player.last_name,
             "avatar_url": player.avatar_url
         }
+        if class_year is not None:
+            result["class_year"] = class_year
+        return result
 
     def get_teams(self, conference: str = None):
         query = self.db.query(Team)
@@ -161,12 +164,10 @@ class TeamService:
             # Single year like "2025" - look for "2025-2026" format (season starting in that year)
             next_year = str(int(year) + 1)
             formatted_season = f"{year}-{next_year}"
-            print(f"🔍 Looking for season: {formatted_season}")
             season = self.db.query(Season).filter(Season.name == formatted_season).first()
             
             # Fallback to LIKE if exact match not found
             if not season:
-                print(f"Exact match not found, trying LIKE: {year}-%")
                 season = self.db.query(Season).filter(
                     Season.name.like(f"{year}-%")
                 ).order_by(Season.name.desc()).first()
@@ -176,16 +177,25 @@ class TeamService:
         
         if not season:
             return []
+                
+        # Import PlayerSeason here to avoid circular imports
+        from models import PlayerSeason
         
-        # Use joinedload to prevent N+1 queries
-        players = (
-            self.db.query(Player)
-            .join(PlayerRoster)
+        # Use joinedload to prevent N+1 queries and get class years
+        players_with_roster = (
+            self.db.query(Player, PlayerSeason.class_year)
+            .join(PlayerRoster, Player.person_id == PlayerRoster.person_id)
+            .outerjoin(
+                PlayerSeason,
+                (func.upper(Player.person_id) == func.upper(PlayerSeason.person_id)) &
+                (PlayerSeason.season_id == season.id)
+            )
             .filter(
                 func.upper(PlayerRoster.team_id) == upper_team_id,
                 PlayerRoster.season_id == season.id,
-                PlayerRoster.active == True  # ← ADDED THIS
+                PlayerRoster.active == True
             )
             .all()
         )
-        return [self._player_to_dict(player) for player in players]
+                        
+        return [self._player_to_dict(player, class_year) for player, class_year in players_with_roster]

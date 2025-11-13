@@ -40,6 +40,7 @@ class PlayerTeamInfo(BaseSchema):
     conference: Optional[str] = None
     gender: Optional[str] = None
     season_id: Optional[str] = None
+    class_year: Optional[str] = None
 
 # Schema for player statistics
 class PlayerStatsInfo(BaseSchema):
